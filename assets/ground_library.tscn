@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3 uid="uid://dyf68jok06qfc"]
+
+[ext_resource type="ArrayMesh" uid="uid://cuh1stj21kslt" path="res://assets/kenney_3d_hex/Models/OBJ format/dirt.obj" id="1_l5ms7"]
+[ext_resource type="ArrayMesh" uid="uid://bge3ba83iptit" path="res://assets/kenney_3d_hex/Models/OBJ format/grass.obj" id="2_65hx0"]
+
+[node name="Node3D" type="Node3D"]
+
+[node name="Dirt" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.493955, 1.19209e-07, 0.277499)
+mesh = ExtResource("1_l5ms7")
+
+[node name="Grass" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.596687, 1.19209e-07, 0.438523)
+mesh = ExtResource("2_65hx0")

@@ -1,0 +1,25 @@
+[gd_scene load_steps=5 format=3 uid="uid://cmri410y4al53"]
+
+[ext_resource type="ArrayMesh" uid="uid://bge3ba83iptit" path="res://assets/kenney_3d_hex/Models/OBJ format/grass.obj" id="1_e1o66"]
+[ext_resource type="Script" path="res://src/core/MapGenerator.gd" id="1_r4x5c"]
+
+[sub_resource type="Sky" id="Sky_jdfr1"]
+
+[sub_resource type="Environment" id="Environment_lhbmm"]
+background_mode = 2
+background_energy_multiplier = 4.17
+sky = SubResource("Sky_jdfr1")
+
+[node name="Game" type="Node3D"]
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(0.707107, -0.5, 0.5, 0, 0.707107, 0.707107, -0.707107, -0.5, 0.5, 10, 10, 10)
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="Camera3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_lhbmm")
+
+[node name="Map" type="Node3D" parent="."]
+script = ExtResource("1_r4x5c")
+tile_mesh = ExtResource("1_e1o66")

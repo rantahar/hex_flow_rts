@@ -1,0 +1,22 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://clrw7s35qnf5h"
+path="res://.godot/imported/stone-mountain.obj-b8039ca1fe18fd011a72e57397b6107b.mesh"
+
+[deps]
+
+files=["res://.godot/imported/stone-mountain.obj-b8039ca1fe18fd011a72e57397b6107b.mesh"]
+
+source_file="res://assets/kenney_3d_hex/Models/OBJ format/stone-mountain.obj"
+dest_files=["res://.godot/imported/stone-mountain.obj-b8039ca1fe18fd011a72e57397b6107b.mesh", "res://.godot/imported/stone-mountain.obj-b8039ca1fe18fd011a72e57397b6107b.mesh"]
+
+[params]
+
+generate_tangents=true
+scale_mesh=Vector3(1, 1, 1)
+offset_mesh=Vector3(0, 0, 0)
+optimize_mesh=true
+force_disable_mesh_compression=false

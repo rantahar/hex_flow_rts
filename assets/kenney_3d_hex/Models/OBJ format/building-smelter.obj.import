@@ -1,0 +1,22 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://dnnikc2aohpho"
+path="res://.godot/imported/building-smelter.obj-0a0acf9168e40e2847cc3780d3ae3bd2.mesh"
+
+[deps]
+
+files=["res://.godot/imported/building-smelter.obj-0a0acf9168e40e2847cc3780d3ae3bd2.mesh"]
+
+source_file="res://assets/kenney_3d_hex/Models/OBJ format/building-smelter.obj"
+dest_files=["res://.godot/imported/building-smelter.obj-0a0acf9168e40e2847cc3780d3ae3bd2.mesh", "res://.godot/imported/building-smelter.obj-0a0acf9168e40e2847cc3780d3ae3bd2.mesh"]
+
+[params]
+
+generate_tangents=true
+scale_mesh=Vector3(1, 1, 1)
+offset_mesh=Vector3(0, 0, 0)
+optimize_mesh=true
+force_disable_mesh_compression=false
