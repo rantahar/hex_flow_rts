@@ -1,25 +1,47 @@
-[gd_scene load_steps=5 format=3 uid="uid://cmri410y4al53"]
+[gd_scene load_steps=9 format=3 uid="uid://cmri410y4al53"]
 
 [ext_resource type="ArrayMesh" uid="uid://bge3ba83iptit" path="res://assets/kenney_3d_hex/Models/OBJ format/grass.obj" id="1_e1o66"]
+[ext_resource type="Script" path="res://src/RTSCamera.gd" id="1_i1nf2"]
 [ext_resource type="Script" path="res://src/core/MapGenerator.gd" id="1_r4x5c"]
+[ext_resource type="Script" path="res://src/ClickMarker.gd" id="4_5dpvh"]
+
+[sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_favtp"]
+turbidity = 2.0
+ground_color = Color(0.0823792, 0.0757382, 0.0579189, 1)
 
 [sub_resource type="Sky" id="Sky_jdfr1"]
+sky_material = SubResource("PhysicalSkyMaterial_favtp")
 
 [sub_resource type="Environment" id="Environment_lhbmm"]
 background_mode = 2
-background_energy_multiplier = 4.17
+background_color = Color(0.95158, 0.95158, 0.95158, 1)
+background_energy_multiplier = 2.0
 sky = SubResource("Sky_jdfr1")
+ambient_light_source = 1
+ambient_light_color = Color(1, 1, 1, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_3v2a4"]
+radius = 1.0
+height = 2.0
 
 [node name="Game" type="Node3D"]
 
 [node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(0.707107, -0.5, 0.5, 0, 0.707107, 0.707107, -0.707107, -0.5, 0.5, 10, 10, 10)
-
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="Camera3D"]
+transform = Transform3D(1, 0, 0, 0, 0.573577, 0.819152, 0, -0.819152, 0.573577, 0, 10, 10)
+script = ExtResource("1_i1nf2")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_lhbmm")
 
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.573576, 0.819152, 0, -0.819152, 0.573576, 0, 30, 30)
+
 [node name="Map" type="Node3D" parent="."]
 script = ExtResource("1_r4x5c")
 tile_mesh = ExtResource("1_e1o66")
+
+[node name="ClickMarker" type="MeshInstance3D" parent="."]
+mesh = SubResource("SphereMesh_3v2a4")
+script = ExtResource("4_5dpvh")
+
+[connection signal="hex_clicked" from="Camera3D" to="ClickMarker" method="_on_hex_clicked"]
