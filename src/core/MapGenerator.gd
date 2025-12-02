@@ -2,24 +2,33 @@ extends Node3D
 
 class_name MapGenerator
 
+const Tile = preload("res://src/core/Tile.gd")
+
 # 1. Exports
-@export var tile_mesh: Mesh # Mesh to instance for each tile
+@export var grass_mesh: Mesh
+@export var dirt_mesh: Mesh
+@export var stone_mesh: Mesh
+@export var water_mesh: Mesh
 @export var map_width: int = 20
 @export var map_height: int = 20
 @export var hex_scale: float = 0.6
 
-# Constants for Pointy-Topped Hex Grid (assuming radius R=1)
-const X_SPACING: float = 1.732*0.57735 # sqrt(3) 
-const Z_SPACING: float = 1.5*0.57735   # 3/2 1.732
+var generated_tiles: Dictionary = {}
 
-func _ready():
-	generate_map()
+# Constants for Pointy-Topped Hex Grid (assuming radius R=1)
+const X_SPACING: float = 1.732*0.57735 # sqrt(3)
+const Z_SPACING: float = 1.5*0.57735   # 3/2 1.732
 
 # 2. Generation Logic (using individual Node Instantiation)
 func generate_map():
-	if not tile_mesh:
-		push_error("Tile Mesh is not set.")
+	var tile_meshes = [grass_mesh, dirt_mesh, stone_mesh, water_mesh]
+	tile_meshes.erase(null) # Remove null entries if user hasn't set all types
+	
+	if tile_meshes.is_empty():
+		push_error("No tile meshes are set.")
 		return
+		
+	generated_tiles.clear() # Clear previously generated tile data
 	
 	# Clear existing children
 	for child in get_children():
@@ -47,7 +56,8 @@ func generate_map():
 			var tile_mesh_instance = MeshInstance3D.new()
 			
 			# Mesh: Set node.mesh = tile_mesh
-			tile_mesh_instance.mesh = tile_mesh
+			var selected_mesh = tile_meshes.pick_random()
+			tile_mesh_instance.mesh = selected_mesh
 			
 			# Scale: Set node.scale
 			tile_mesh_instance.scale = Vector3.ONE * hex_scale
@@ -55,6 +65,28 @@ func generate_map():
 			# Rotation Fix: Set node.rotation_degrees.y = 90 (or similar)
 			tile_mesh_instance.rotation_degrees.y = 0.0
 			
+			# Add collision shape based on mesh geometry
+			tile_mesh_instance.create_trimesh_collision() # Requirement 1: Trimesh collision
+			
 			tile_root.add_child(tile_mesh_instance)
 			
 			add_child(tile_root)
+			
+			# Requirement 2: Store tile reference
+			var tile_data = Tile.new()
+			tile_data.x = x
+			tile_data.z = z
+			tile_data.world_pos = position
+			
+			# Set infinite cost for water tiles
+			if selected_mesh == water_mesh:
+				tile_data.walkable = false
+				tile_data.cost = Tile.INF # Tile.INF defined in Tile.gd
+				
+			tile_data.node = tile_root # Use the StaticBody3D (tile_root) as the node reference for lookup
+			
+			var coords = Vector2i(x, z)
+			generated_tiles[coords] = tile_data
+
+func get_tiles() -> Dictionary:
+	return generated_tiles

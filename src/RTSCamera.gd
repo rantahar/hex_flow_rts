@@ -1,7 +1,10 @@
 extends Camera3D
 
 # Signals
-signal hex_clicked(world_position: Vector3)
+signal hex_clicked(tile_coords: Vector2i, world_position: Vector3, tile_node: Node3D)
+
+# Dependencies
+@export var grid_registry: Grid
 
 # Constants
 const STEP_SIZE = 0.3
@@ -15,9 +18,20 @@ var is_middle_mouse_down: bool = false
 var last_mouse_position: Vector2 = Vector2.ZERO
 
 func _ready():
+	if not is_instance_valid(grid_registry):
+		# Attempt to find Grid dynamically, assuming Map is a sibling named "Map"
+		var map_node = get_parent().find_child("Map", true, false)
+		if map_node:
+			grid_registry = map_node.get_node_or_null("Grid")
+			if not is_instance_valid(grid_registry):
+				push_error("Could not find Grid node under Map/Grid.")
+		else:
+			push_error("Could not find Map node.")
+			
 	# Ensure the camera is set up for 3D navigation
 	# Using 'ui' actions for movement, ensure they are mapped in Project Settings -> Input Map
 	make_current()
+	print("DEBUG: Grid registry valid: %s" % is_instance_valid(grid_registry)) # DEBUG 5
 
 func _process(delta):
 	# Movement (WASD/Arrows + Edge Scrolling)
@@ -93,7 +107,7 @@ func _handle_middle_mouse_drag(event):
 		# Pan in camera X direction (sideways)
 		var pan_x = transform.basis.x * -delta_mouse.x * pan_speed
 		# Pan in camera Z direction (forward/backward movement on screen Y axis)
-		var pan_z = transform.basis.z * delta_mouse.y * pan_speed
+		var pan_z = transform.basis.z * -delta_mouse.y * pan_speed
 		
 		# Ensure panning only occurs in the XZ plane (ground level)
 		pan_x.y = 0
@@ -125,23 +139,61 @@ func _handle_zoom(event):
 
 func _handle_raycast_click(event):
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		print("click")
 		
+		if not is_instance_valid(grid_registry):
+			push_error("Grid registry not available in RTSCamera.gd")
+			return
+			
 		var mouse_pos_vp = get_viewport().get_mouse_position()
 		
 		# Get ray origin and direction from the camera
 		var ray_origin = project_ray_origin(mouse_pos_vp)
-		var ray_direction = project_ray_normal(mouse_pos_vp)
+		var ray_end = ray_origin + project_ray_normal(mouse_pos_vp) * 1000.0 # Ray length of 1000 units
 		
-		# Raycast against the ground plane (y=0)
-		var ground_plane = Plane(Vector3.UP, Vector3.ZERO)
+		# Create ray query parameters
+		var space = get_world_3d().space
+		var query = PhysicsRayQueryParameters3D.create(ray_origin, ray_end)
 		
-		# Check if the ray intersects the plane
-		var intersection_point = ground_plane.intersects_ray(ray_origin, ray_direction)
+		# Check ONLY layer 0 (default) for tiles
+		query.collide_with_areas = false
+		query.collide_with_bodies = true
+		query.collision_mask = 1 # Bit 0 is the default collision mask
 		
-		if intersection_point != null:
-			# Emit signal
-			emit_signal("hex_clicked", intersection_point)
-
-			# Debug visualization: print the hit position
-			print("Hex Clicked at: ", intersection_point)
+		# Perform the raycast
+		var result = PhysicsServer3D.space_get_direct_state(space).intersect_ray(query)
+		print("DEBUG: Raycast result: %s" % result) # DEBUG 1
+		
+		if result:
+			# Get collision object data
+			var collider = result.collider
+			print("DEBUG: Collider type: %s" % collider.get_class()) # DEBUG 2
+			var position = result.position
 			
+			# We need to find the registered StaticBody3D ancestor.
+			var current_node: Node = collider
+			var tile_node: StaticBody3D = null
+			var tile_coords: Vector2i = Vector2i(-1, -1)
+			
+			# Traverse up the tree until a registered node is found or we reach the root of the map generation.
+			while current_node:
+				if current_node is StaticBody3D:
+					tile_coords = grid_registry.find_tile_by_node(current_node)
+					if tile_coords != Vector2i(-1, -1):
+						tile_node = current_node
+						break
+				
+				# Optimization: Stop searching if we hit the top-level scene/map node
+				if current_node.get_parent() is not Node: # Check if parent is null or not a regular node
+					break
+					
+				current_node = current_node.get_parent()
+			
+			print("DEBUG: Tile lookup coords: %s" % tile_coords)
+			
+			if tile_coords != Vector2i(-1, -1):
+				# Emit signal
+				emit_signal("hex_clicked", tile_coords, position, tile_node)
+	
+				# Debug visualization
+				print("Hex Clicked: Coords=%s, WorldPos=%s" % [tile_coords, position])

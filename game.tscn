@@ -1,9 +1,18 @@
-[gd_scene load_steps=9 format=3 uid="uid://cmri410y4al53"]
+[gd_scene load_steps=18 format=3 uid="uid://cmri410y4al53"]
 
 [ext_resource type="ArrayMesh" uid="uid://bge3ba83iptit" path="res://assets/kenney_3d_hex/Models/OBJ format/grass.obj" id="1_e1o66"]
 [ext_resource type="Script" path="res://src/RTSCamera.gd" id="1_i1nf2"]
 [ext_resource type="Script" path="res://src/core/MapGenerator.gd" id="1_r4x5c"]
+[ext_resource type="Script" path="res://src/core/map.gd" id="2_ie3hc"]
+[ext_resource type="Script" path="res://src/core/Grid.gd" id="3_yrrol"]
 [ext_resource type="Script" path="res://src/ClickMarker.gd" id="4_5dpvh"]
+[ext_resource type="ArrayMesh" uid="uid://cuh1stj21kslt" path="res://assets/kenney_3d_hex/Models/OBJ format/dirt.obj" id="6_jnq6j"]
+[ext_resource type="ArrayMesh" uid="uid://b0gbe0wrwuiko" path="res://assets/kenney_3d_hex/Models/OBJ format/grass-hill.obj" id="7_o2svj"]
+[ext_resource type="ArrayMesh" uid="uid://rbv5osn8apoe" path="res://assets/kenney_3d_hex/Models/OBJ format/water.obj" id="8_sltmo"]
+[ext_resource type="Script" path="res://src/FlowFieldVisualizer.gd" id="9_83565"]
+[ext_resource type="Script" path="res://src/Game.gd" id="10_gds"]
+[ext_resource type="Script" path="res://src/core/Unit.gd" id="11_op031"]
+[ext_resource type="ArrayMesh" uid="uid://b4wu536ey2iif" path="res://assets/robot_simple.obj" id="12_lirk2"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_favtp"]
 turbidity = 2.0
@@ -21,14 +30,16 @@ ambient_light_source = 1
 ambient_light_color = Color(1, 1, 1, 1)
 
 [sub_resource type="SphereMesh" id="SphereMesh_3v2a4"]
-radius = 1.0
-height = 2.0
+radius = 0.2
+height = 0.4
 
 [node name="Game" type="Node3D"]
+script = ExtResource("10_gds")
 
-[node name="Camera3D" type="Camera3D" parent="."]
+[node name="Camera3D" type="Camera3D" parent="." node_paths=PackedStringArray("grid_registry")]
 transform = Transform3D(1, 0, 0, 0, 0.573577, 0.819152, 0, -0.819152, 0.573577, 0, 10, 10)
 script = ExtResource("1_i1nf2")
+grid_registry = NodePath("../Map/Grid")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_lhbmm")
@@ -37,8 +48,25 @@ environment = SubResource("Environment_lhbmm")
 transform = Transform3D(1, 0, 0, 0, 0.573576, 0.819152, 0, -0.819152, 0.573576, 0, 30, 30)
 
 [node name="Map" type="Node3D" parent="."]
+script = ExtResource("2_ie3hc")
+
+[node name="Grid" type="Node3D" parent="Map"]
+script = ExtResource("3_yrrol")
+
+[node name="MapGenerator" type="Node3D" parent="Map"]
 script = ExtResource("1_r4x5c")
-tile_mesh = ExtResource("1_e1o66")
+grass_mesh = ExtResource("1_e1o66")
+dirt_mesh = ExtResource("6_jnq6j")
+stone_mesh = ExtResource("7_o2svj")
+water_mesh = ExtResource("8_sltmo")
+
+[node name="FlowVisualizer" type="Node3D" parent="Map"]
+script = ExtResource("9_83565")
+
+[node name="Unit" type="Node3D" parent="Map"]
+visible = false
+script = ExtResource("11_op031")
+mesh = ExtResource("12_lirk2")
 
 [node name="ClickMarker" type="MeshInstance3D" parent="."]
 mesh = SubResource("SphereMesh_3v2a4")

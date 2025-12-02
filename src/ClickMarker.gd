@@ -17,9 +17,11 @@ func _ready():
 		else:
 			push_error("RTSCamera node not found at path '"+str(camera_path)+"' or does not emit 'hex_clicked'. Marker functionality disabled.")
 
-func _on_hex_clicked(world_position: Vector3):
+func _on_hex_clicked(tile_coords: Vector2i, world_position: Vector3, tile_node: Node3D):
 	# Move the existing visual marker (self) to the clicked location
-	global_position = Vector3(world_position.x, 0, world_position.z)
+	# Use the raycast hit position to handle varying tile heights.
+	global_position = world_position
+	print("Hex Clicked at coords: ", tile_coords)
 	print("Marker position: ", global_position)
 	print("Marker parent: ", get_parent())
 	print("Marker in tree: ", is_inside_tree())
