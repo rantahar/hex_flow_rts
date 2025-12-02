@@ -30,7 +30,6 @@ func initialize_players(player_configs: Array) -> void:
 		add_child(player_node)
 		players.append(player_node)
 		
-	print("Initialized %d players" % players.size())
 
 # Returns a player object based on ID, assuming ID matches index for simplicity.
 func get_player(player_id: int): # Removed -> Player type hint as it conflicted with PlayerNode usage

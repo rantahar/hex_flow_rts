@@ -21,11 +21,6 @@ func _on_hex_clicked(tile_coords: Vector2i, world_position: Vector3, tile_node: 
 	# Move the existing visual marker (self) to the clicked location
 	# Use the raycast hit position to handle varying tile heights.
 	global_position = world_position
-	print("Hex Clicked at coords: ", tile_coords)
-	print("Marker position: ", global_position)
-	print("Marker parent: ", get_parent())
-	print("Marker in tree: ", is_inside_tree())
-	print("Scene root: ", get_tree().root)
 	# Reset the timer
 	var timer = get_tree().create_timer(MARKER_LIFETIME)
 	# Connect the timer to a function for future visibility toggle (as requested)

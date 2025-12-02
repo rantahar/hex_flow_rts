@@ -31,7 +31,6 @@ func _ready():
 	# Ensure the camera is set up for 3D navigation
 	# Using 'ui' actions for movement, ensure they are mapped in Project Settings -> Input Map
 	make_current()
-	print("DEBUG: Grid registry valid: %s" % is_instance_valid(grid_registry)) # DEBUG 5
 
 func _process(delta):
 	# Movement (WASD/Arrows + Edge Scrolling)
@@ -139,7 +138,6 @@ func _handle_zoom(event):
 
 func _handle_raycast_click(event):
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		print("click")
 		
 		if not is_instance_valid(grid_registry):
 			push_error("Grid registry not available in RTSCamera.gd")
@@ -162,12 +160,10 @@ func _handle_raycast_click(event):
 		
 		# Perform the raycast
 		var result = PhysicsServer3D.space_get_direct_state(space).intersect_ray(query)
-		print("DEBUG: Raycast result: %s" % result) # DEBUG 1
 		
 		if result:
 			# Get collision object data
 			var collider = result.collider
-			print("DEBUG: Collider type: %s" % collider.get_class()) # DEBUG 2
 			var position = result.position
 			
 			# We need to find the registered StaticBody3D ancestor.
@@ -189,11 +185,8 @@ func _handle_raycast_click(event):
 					
 				current_node = current_node.get_parent()
 			
-			print("DEBUG: Tile lookup coords: %s" % tile_coords)
-			
 			if tile_coords != Vector2i(-1, -1):
 				# Emit signal
 				emit_signal("hex_clicked", tile_coords, position, tile_node)
 	
 				# Debug visualization
-				print("Hex Clicked: Coords=%s, WorldPos=%s" % [tile_coords, position])

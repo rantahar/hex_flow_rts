@@ -95,7 +95,6 @@ func visualize() -> void:
 		print("ERROR: FlowField or Grid not set.")
 		return
 		
-	print("DEBUG: Flow field visualization triggered (calculated state for player %d)." % player_id)
 	clear_visualization()
 	
 	var tiles = grid.tiles.values()

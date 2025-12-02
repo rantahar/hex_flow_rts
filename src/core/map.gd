@@ -20,7 +20,6 @@ func _ready():
 	# 2. Register the generated tiles with the Grid
 	grid.register_tiles(map_generator.get_tiles())
 	
-	print("Map structure and Grid registered. Waiting for Game initialization to initialize flows.")
 	
 # To be called by the Game node after player initialization
 func initialize_flows():
@@ -53,7 +52,6 @@ func initialize_flows():
 	current_player_id = 1 # Start cycle by initializing with P1 flow data
 	_on_visualization_timer_timeout() # Run immediately to show P0 first (after cycling from P1)
 
-	print("Multi-player Flow Field system initialized. Starting visualization cycle.")
 
 # Handles tile selection via mouse click (Left click for Source, Right click for Target)
 func _unhandled_input(event: InputEvent):
@@ -64,12 +62,10 @@ func _unhandled_input(event: InputEvent):
 			if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 				source_tile = tile_under_cursor
 				# Use ClickMarker if it exists to show selection, or just print
-				print("Source set to: ", source_tile.get_coords())
 				_calculate_flow_field()
 			
 			elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 				target_tile = tile_under_cursor
-				print("Target set to: ", target_tile.get_coords())
 				_calculate_flow_field()
 				
 # Performs a raycast from the camera to find the tile node clicked
@@ -120,7 +116,6 @@ func _setup_player_flow(p_id: int, target_coords: Vector2i, visualizer: FlowFiel
 		visualizer.setup(flow, grid, p_id)
 		visualizer.visualize_initial_state(grid.tiles.values())
 	
-	print("P%d Flow Field calculated and stored with initial target %s." % [p_id, target_coords])
 
 
 # Helper function to handle flow field calculation based on user click
@@ -146,7 +141,6 @@ func _calculate_flow_field() -> void:
 		# Note: We are not updating Game.PLAYER_TARGETS here, assuming Game.gd holds fixed initial config.
 		# If interactive player target changes need persistence, update Game.PLAYER_TARGETS[p_id].
 		
-		print("Interactive flow field calculated and visualized for P%d." % p_id)
 
 # Cycles visualization between players P0 and P1
 func _on_visualization_timer_timeout():
@@ -164,4 +158,3 @@ func _on_visualization_timer_timeout():
 	current_visualizer.setup(current_flow, grid, current_player_id)
 	current_visualizer.visualize()
 	
-	print("Switched visualization to Player %d." % current_player_id)
