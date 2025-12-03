@@ -17,15 +17,20 @@ func _ready():
 		else:
 			push_error("RTSCamera node not found at path '"+str(camera_path)+"' or does not emit 'hex_clicked'. Marker functionality disabled.")
 
-func _on_hex_clicked(tile_coords: Vector2i, world_position: Vector3, tile_node: Node3D):
-	# Move the existing visual marker (self) to the clicked location
-	# Use the raycast hit position to handle varying tile heights.
-	global_position = world_position
+func _on_hex_clicked(tile: Tile):
+	if not tile:
+		return
+		
+	# Move the existing visual marker (self) to the calculated location
+	# Use tile center XZ coordinates and add a small Y offset (0.1) for visibility above the tile
+	global_position = tile.world_pos + Vector3(0, 0.1, 0)
+	# Make marker visible on click
+	visible = true
 	# Reset the timer
 	var timer = get_tree().create_timer(MARKER_LIFETIME)
-	# Connect the timer to a function for future visibility toggle (as requested)
+	# Connect the timer to hide the marker after the timeout.
 	timer.timeout.connect(_on_timer_timeout)
 
 func _on_timer_timeout():
-	# Future implementation for turning visibility off will go here.
-	pass
+	# Hide the marker.
+	visible = false

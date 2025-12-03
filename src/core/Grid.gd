@@ -1,6 +1,11 @@
 extends Node
 class_name Grid
 
+# Hex grid geometry constants
+const HEX_SCALE: float = 0.6
+const X_SPACING: float = 1.732 * 0.57735  # sqrt(3) * 0.57735
+const Z_SPACING: float = 1.5 * 0.57735
+
 const Tile = preload("res://src/core/Tile.gd")
 
 # Hex grid neighbor offsets (Odd-R offset coordinates)
@@ -53,9 +58,14 @@ func find_tile_by_node(node: Node3D) -> Vector2i:
 
 func hex_to_world(x: int, z: int) -> Vector3:
 	var coords = Vector2i(x, z)
-	if tiles.has(coords):
-		return tiles[coords].world_pos
-	return Vector3.ZERO # Should handle this case gracefully
+	if not tiles.has(coords):
+		push_error("Grid.hex_to_world: No tile at coordinates (%d, %d)" % [x, z])
+		return Vector3.ZERO
+	return tiles[coords].world_pos
+
+func is_valid_coords(coords: Vector2i) -> bool:
+	return tiles.has(coords)
+
 
 func connect_neighbors():
 	# Iterate over every tile in the grid
@@ -75,7 +85,6 @@ func connect_neighbors():
 			if tiles.has(neighbor_coords):
 				tile.neighbors.append(tiles[neighbor_coords] as Tile)
 				
-		# We can also store the tile coordinates within the Tile object itself,
-		# although MapGenerator already sets x and z, this ensures consistency
+		# Store coordinates in the Tile object for quick access and consistency.
 		tile.x = coords.x
 		tile.z = coords.y

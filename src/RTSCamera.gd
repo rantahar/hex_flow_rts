@@ -1,13 +1,13 @@
 extends Camera3D
 
 # Signals
-signal hex_clicked(tile_coords: Vector2i, world_position: Vector3, tile_node: Node3D)
+signal hex_clicked(tile: Tile)
 
 # Dependencies
 @export var grid_registry: Grid
 
 # Constants
-const STEP_SIZE = 0.3
+const STEP_SIZE = 0.05
 const EDGE_THRESHOLD = 20.0
 const ZOOM_SPEED = 0.5
 const ZOOM_MIN = 1.0
@@ -52,7 +52,7 @@ func _handle_movement(delta: float):
 	var viewport = get_viewport()
 	var viewport_size = viewport.size
 
-	# 1. Key Movement (WASD/Arrows)
+	# Key Movement (uses ui_ actions)
 	# Assuming default Godot input map actions or standard names
 	if Input.is_action_pressed("ui_up"):
 		direction -= transform.basis.z
@@ -63,7 +63,7 @@ func _handle_movement(delta: float):
 	if Input.is_action_pressed("ui_right"):
 		direction += transform.basis.x
 
-	# 3. Edge Scrolling
+	# Edge Scrolling
 	var mouse_pos_vp = viewport.get_mouse_position()
 
 	if mouse_pos_vp.x < EDGE_THRESHOLD:
@@ -82,8 +82,11 @@ func _handle_movement(delta: float):
 		direction.y = 0
 		
 		# Normalize and scale movement vector
+		# Calculate dynamic speed based on position.y to maintain constant screen-space movement regardless of zoom.
+		var dynamic_speed = STEP_SIZE * position.y
+		
 		# Multiplying by 60.0 ensures movement is frame-rate independent and matches typical physics update rate
-		var final_direction = direction.normalized() * STEP_SIZE * delta * 60.0 
+		var final_direction = direction.normalized() * dynamic_speed * delta * 60.0
 
 		# Apply translation
 		position += final_direction
@@ -99,8 +102,8 @@ func _handle_middle_mouse_drag(event):
 		var current_mouse_position = get_viewport().get_mouse_position()
 		var delta_mouse = current_mouse_position - last_mouse_position
 		
-		# Panning sensitivity
-		var pan_speed = STEP_SIZE * 0.1
+		# Panning sensitivity. Scale by position.y to maintain constant screen-space drag sensitivity regardless of zoom.
+		var pan_speed = STEP_SIZE * 0.1 * position.y
 
 		# Translate the camera based on mouse movement (inverse direction for drag)
 		# Pan in camera X direction (sideways)
@@ -186,7 +189,9 @@ func _handle_raycast_click(event):
 				current_node = current_node.get_parent()
 			
 			if tile_coords != Vector2i(-1, -1):
-				# Emit signal
-				emit_signal("hex_clicked", tile_coords, position, tile_node)
-	
-				# Debug visualization
+				# Look up Tile object
+				var tile = grid_registry.tiles.get(tile_coords)
+				
+				if tile:
+					# Emit signal with the Tile object
+					emit_signal("hex_clicked", tile)

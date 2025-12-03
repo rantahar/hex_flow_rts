@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3 uid="uid://cmri410y4al53"]
+[gd_scene load_steps=16 format=3 uid="uid://cmri410y4al53"]
 
 [ext_resource type="ArrayMesh" uid="uid://bge3ba83iptit" path="res://assets/kenney_3d_hex/Models/OBJ format/grass.obj" id="1_e1o66"]
 [ext_resource type="Script" path="res://src/RTSCamera.gd" id="1_i1nf2"]
@@ -11,8 +11,6 @@
 [ext_resource type="ArrayMesh" uid="uid://rbv5osn8apoe" path="res://assets/kenney_3d_hex/Models/OBJ format/water.obj" id="8_sltmo"]
 [ext_resource type="Script" path="res://src/FlowFieldVisualizer.gd" id="9_83565"]
 [ext_resource type="Script" path="res://src/Game.gd" id="10_gds"]
-[ext_resource type="Script" path="res://src/core/Unit.gd" id="11_op031"]
-[ext_resource type="ArrayMesh" uid="uid://b4wu536ey2iif" path="res://assets/robot_simple.obj" id="12_lirk2"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_favtp"]
 turbidity = 2.0
@@ -26,7 +24,7 @@ background_mode = 2
 background_color = Color(0.95158, 0.95158, 0.95158, 1)
 background_energy_multiplier = 2.0
 sky = SubResource("Sky_jdfr1")
-ambient_light_source = 1
+ambient_light_source = 3
 ambient_light_color = Color(1, 1, 1, 1)
 
 [sub_resource type="SphereMesh" id="SphereMesh_3v2a4"]
@@ -62,11 +60,6 @@ water_mesh = ExtResource("8_sltmo")
 
 [node name="FlowVisualizer" type="Node3D" parent="Map"]
 script = ExtResource("9_83565")
-
-[node name="Unit" type="Node3D" parent="Map"]
-visible = false
-script = ExtResource("11_op031")
-mesh = ExtResource("12_lirk2")
 
 [node name="ClickMarker" type="MeshInstance3D" parent="."]
 mesh = SubResource("SphereMesh_3v2a4")

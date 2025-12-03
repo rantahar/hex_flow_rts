@@ -3,9 +3,6 @@ class_name FlowFieldVisualizer
 
 # Dependencies (FlowField is needed for INF constant)
 var arrow_mesh: Mesh
-var flow_field: FlowField
-var grid: Grid
-var player_id: int # Used for visualization color/debug
 
 # Configuration
 const ARROW_HEIGHT: float = 0.4
@@ -42,30 +39,30 @@ func clear_visualization() -> void:
 	current_arrows.clear()
 
 # Finds the maximum cost among all tiles to normalize the gradient.
-# Tiles should be an Array[Tile] but Godot GDScript 2.0 may handle dynamic typing fine if Tile is class_name.
-func _get_max_flow_cost() -> float:
-	if not flow_field:
+# Assumes tiles are available via p_grid.
+func _get_max_flow_cost(p_flow_field: FlowField, p_grid: Grid) -> float:
+	if not p_flow_field:
 		return 0.0
 		
 	var max_cost: float = 0.0
-	for tile in grid.tiles.values():
-		var cost = flow_field.get_flow_cost(tile)
+	for tile in p_grid.tiles.values():
+		var cost = p_flow_field.get_flow_cost(tile)
 		# Check if cost is a finite positive number
 		if cost < FlowField.INF and cost > max_cost:
 			max_cost = cost
 	return max_cost
 
 # Calculates color based on flow_cost relative to max_cost (0 = Green, Max = Red)
-func _get_color_from_cost(cost: float, max_cost: float) -> Color:
+func _get_color_from_cost(cost: float, max_cost: float, p_player_id: int) -> Color:
 	var COLOR_MIN: Color
 	var COLOR_MID: Color
 	var COLOR_MAX: Color
 	
-	if player_id == 0:
+	if p_player_id == 0:
 		COLOR_MIN = P0_COLOR_MIN
 		COLOR_MID = P0_COLOR_MID
 		COLOR_MAX = P0_COLOR_MAX
-	else: # Assume player_id == 1 for demonstration purposes
+	else: # Use Player 1 colors for all other player IDs (e.g., p_player_id == 1)
 		COLOR_MIN = P1_COLOR_MIN
 		COLOR_MID = P1_COLOR_MID
 		COLOR_MAX = P1_COLOR_MAX
@@ -88,97 +85,50 @@ func _get_color_from_cost(cost: float, max_cost: float) -> Color:
 		var local_ratio = (ratio - 0.5) * 2.0
 		return COLOR_MID.lerp(COLOR_MAX, local_ratio)
 
-# Spawns arrows on each tile pointing in flow_direction, colored by flow_cost.
-# Spawns arrows on each tile pointing in flow_direction, colored by flow_cost.
-func visualize() -> void:
-	if not flow_field or not grid:
-		print("ERROR: FlowField or Grid not set.")
-		return
-		
+func update_visualization(p_flow_field: FlowField, p_grid: Grid, p_player_id: int) -> void:
 	clear_visualization()
 	
-	var tiles = grid.tiles.values()
+	if not p_flow_field or not p_grid:
+		print("ERROR: FlowField or Grid not provided.")
+		return
+	
+	var tiles = p_grid.tiles.values()
 	if tiles.is_empty():
 		return
-		
-	var max_cost: float = _get_max_flow_cost()
+	
+	var max_cost: float = _get_max_flow_cost(p_flow_field, p_grid)
 	
 	for tile in tiles:
-		var cost = flow_field.get_flow_cost(tile)
-		var direction_2d = flow_field.get_flow_direction(tile)
-
-		if cost >= FlowField.INF or cost == 0.0 or direction_2d == Vector2i.ZERO:
+		var cost = p_flow_field.get_flow_cost(tile)
+		var next_tile = p_flow_field.get_next_tile(tile, p_grid)
+		
+		if cost >= FlowField.INF or cost == 0.0 or not next_tile:
 			continue
-
+		
 		var arrow = MeshInstance3D.new()
 		arrow.mesh = arrow_mesh
 		arrow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(arrow)
 		current_arrows.append(arrow)
-
-		# 1. Position (Local to FlowFieldVisualizer)
+		
 		var world_pos = tile.world_pos
 		arrow.position = world_pos + Vector3(0, ARROW_OFFSET_Y, 0)
 		
-		# 2. Rotation (Flow Direction)
-		var direction_3d = Vector3(direction_2d.x, 0, direction_2d.y).normalized()
+		var direction_3d = (next_tile.world_pos - world_pos).normalized()
+		direction_3d.y = 0.0 # Ensure it's purely planar direction
 		
-		# 2a. Calculate rotation to align +Z with direction_3d
 		var basis_rotation: Basis
 		if direction_3d != Vector3.ZERO:
-			# Basis.looking_at aligns the Z axis towards the target direction_3d
+			# Use Z-axis pointing forward convention (hexagonal grid)
 			basis_rotation = Basis.looking_at(direction_3d, Vector3.UP)
 		else:
 			basis_rotation = Basis.IDENTITY
-			
-		# 2b. Rotate Cone from +Y (default mesh axis) to +Z (flow direction axis)
-		var rotation_to_align_cone = Transform3D.IDENTITY.rotated(Vector3.RIGHT, deg_to_rad(-90)).basis
 		
-		# Combine rotations and apply to basis (position is set separately)
+		# Rotate the cone mesh 90 degrees around X to align its tip (currently pointing up/Y) with its local Z-axis (forward)
+		var rotation_to_align_cone = Transform3D.IDENTITY.rotated(Vector3.RIGHT, deg_to_rad(-90)).basis
 		arrow.basis = basis_rotation * rotation_to_align_cone
 		
-		# 3. Coloring
-		var color = _get_color_from_cost(cost, max_cost)
+		var color = _get_color_from_cost(cost, max_cost, p_player_id)
 		var material = StandardMaterial3D.new()
 		material.albedo_color = color
-		arrow.material_override = material
-
-func setup(flow_field: FlowField, grid: Grid, p_player_id: int):
-	self.flow_field = flow_field
-	self.grid = grid
-	self.player_id = p_player_id
-
-func visualize_initial_state(tiles: Array) -> void:
-	clear_visualization()
-	
-	if tiles.is_empty():
-		return
-		
-	# Default rotation setup: point along +Z (using the ConeMesh helper rotation)
-	var default_direction = Vector3(0, 0, 1).normalized()
-	# Calculate default rotation basis (rotation only, no translation component)
-	var rotation_to_align_cone = Transform3D.IDENTITY.rotated(Vector3.RIGHT, deg_to_rad(-90)).basis
-	var basis_rotation = Basis.looking_at(default_direction, Vector3.UP)
-	var default_basis = basis_rotation * rotation_to_align_cone
-	
-	# Default color: Cyan/Mid color for P1, since it's an initial visualization
-	# We use P1_COLOR_MID to ensure it contrasts with P0 colors (Green/Yellow/Red)
-	var material = StandardMaterial3D.new()
-	material.albedo_color = P1_COLOR_MID
-	
-	for tile in tiles:
-		var arrow = MeshInstance3D.new()
-		arrow.mesh = arrow_mesh
-		arrow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(arrow)
-		current_arrows.append(arrow)
-
-		# 1. Position (Local to FlowFieldVisualizer)
-		var world_pos = tile.world_pos
-		arrow.position = world_pos + Vector3(0, ARROW_OFFSET_Y, 0)
-		
-		# 2. Rotation: Default direction (rotation only)
-		arrow.basis = default_basis
-		
-		# 3. Coloring: Default color
 		arrow.material_override = material

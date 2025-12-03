@@ -2,14 +2,22 @@ class_name FlowField
 var player_id: int
 var flow_data: Dictionary = {}  # Format: {Vector2i(x,z): {cost: float, direction: Vector2i}}
 
-# Godot's built-in infinity constant for floats (assumes Tile.gd defined it as well)
+# Godot's built-in infinity constant for floats
 const INF: float = 1e20
 
-# Calculates the flow field using Dijkstra's algorithm (optimized as BFS for uniform cost)
+# Calculates the flow field using Dijkstra's algorithm
 # starting from the targets with specified initial costs.
 # targets: {Tile: float} - Dictionary mapping target Tiles to their initial flow cost (priority).
-# This no longer modifies Tile objects, but stores data internally in flow_data.
+# Stores flow field data internally in flow_data structure.
 func calculate(targets: Dictionary, grid: Grid) -> void:
+	if not grid:
+		push_error("FlowField.calculate: Grid is null")
+		return
+	
+	if targets.is_empty():
+		push_warning("FlowField.calculate: No targets provided for player %d" % player_id)
+		return
+	
 	flow_data.clear()
 	
 	var initial_targets = targets.keys() # Assumes targets maps Tile -> float
@@ -111,12 +119,25 @@ func calculate(targets: Dictionary, grid: Grid) -> void:
 ## Query Methods ##
 
 func get_flow_cost(tile: Tile) -> float:
+	if not tile:
+		push_error("FlowField.get_flow_cost: Tile is null")
+		return INF
 	var coords = tile.get_coords()
 	if flow_data.has(coords):
 		return flow_data[coords]["cost"]
 	return INF
 
+func get_next_tile(current_tile: Tile, grid: Grid) -> Tile:
+	var flow_direction = get_flow_direction(current_tile)
+	if flow_direction == Vector2i.ZERO:
+		return null
+	
+	var next_coords = current_tile.get_coords() + flow_direction
+	return grid.tiles.get(next_coords) as Tile
 func get_flow_direction(tile: Tile) -> Vector2i:
+	if not tile:
+		push_error("FlowField.get_flow_direction: Tile is null")
+		return Vector2i.ZERO
 	var coords = tile.get_coords()
 	if flow_data.has(coords):
 		return flow_data[coords]["direction"]

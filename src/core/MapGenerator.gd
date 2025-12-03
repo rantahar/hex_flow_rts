@@ -13,12 +13,11 @@ const Tile = preload("res://src/core/Tile.gd")
 @export var map_height: int = 20
 @export var hex_scale: float = 0.6
 
+@onready var grid: Grid = get_parent().get_node("Grid")
+
 var generated_tiles: Dictionary = {}
 
 # Constants for Pointy-Topped Hex Grid (assuming radius R=1)
-const X_SPACING: float = 1.732*0.57735 # sqrt(3)
-const Z_SPACING: float = 1.5*0.57735   # 3/2 1.732
-
 # 2. Generation Logic (using individual Node Instantiation)
 func generate_map():
 	var tile_meshes = [grass_mesh, dirt_mesh, stone_mesh, water_mesh]
@@ -38,12 +37,12 @@ func generate_map():
 		for x in range(map_width):
 			
 			# Hex position calculation (Odd-R offset logic)
-			var pos_x = float(x) * X_SPACING * hex_scale
-			var pos_z = float(z) * Z_SPACING * hex_scale
+			var pos_x = float(x) * Grid.X_SPACING * hex_scale
+			var pos_z = float(z) * Grid.Z_SPACING * hex_scale
 			
 			# Apply Offset: If z (row) is odd, add half-spacing to pos_x
 			if z % 2 != 0:
-				pos_x += (X_SPACING * hex_scale) / 2.0
+				pos_x += (Grid.X_SPACING * hex_scale) / 2.0
 				
 			var position = Vector3(pos_x, 0, pos_z)
 			
