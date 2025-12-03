@@ -1,6 +1,7 @@
 class_name Tile
 
 const Grid = preload("res://src/core/Grid.gd")
+const Unit = preload("res://src/core/Unit.gd")
 const FORMATION_RADIUS: float = Grid.HEX_SCALE * 0.3
 
 # 6 positions in a radial hex pattern around tile center (radius ~0.3 * HEX_SCALE)
@@ -13,7 +14,8 @@ const FORMATION_POSITIONS: Array[Vector2] = [
 	Vector2(FORMATION_RADIUS * -0.5, FORMATION_RADIUS * -0.866025), # 240 deg (SW)
 	Vector2(FORMATION_RADIUS * 0.5, FORMATION_RADIUS * -0.866025), # 300 deg (SE)
 ]
-var occupied_slots: Array[bool] = [false, false, false, false, false, false]
+# Stores Unit references in slots (null if slot is free)
+var occupied_slots: Array = [null, null, null, null, null, null]
 
 # Godot's built-in infinity constant for floats
 const INF: float = 1e20
@@ -39,13 +41,28 @@ var neighbors: Array[Tile] = []
 func get_coords() -> Vector2i:
 	return Vector2i(x, z)
 
-func claim_formation_slot() -> int:
-	for i in range(FORMATION_POSITIONS.size()):
-		if not occupied_slots[i]:
-			occupied_slots[i] = true
+# Finds and returns the index of the first available formation slot, and registers the unit in it.
+func claim_formation_slot(unit: Unit) -> int:
+	for i in range(occupied_slots.size()):
+		if occupied_slots[i] == null:
+			occupied_slots[i] = unit # Register the unit instance
 			return i
 	return -1 # Full
 
+# Releases a slot by setting it to null.
 func release_formation_slot(slot_index: int):
 	if slot_index != -1 and slot_index >= 0 and slot_index < occupied_slots.size():
-		occupied_slots[slot_index] = false
+		occupied_slots[slot_index] = null
+
+# Checks if this tile contains any units belonging to a different player.
+func has_enemy_units(player_id: int) -> bool:
+	print("Tile (%d, %d) checking for enemy units for player %d. Occupied slots: %s" % [x, z, player_id, occupied_slots])
+	for unit_reference in occupied_slots:
+		if unit_reference != null:
+			# Safety check: ensure unit_reference is a valid instance before accessing player_id
+			if is_instance_valid(unit_reference) and unit_reference.player_id != player_id:
+				print("Enemy detected on Tile (%d, %d): Unit ID %d vs Player ID %d" % [x, z, unit_reference.player_id, player_id])
+				return true
+			elif not is_instance_valid(unit_reference):
+				push_warning("Tile (%d, %d) occupied_slots contains an invalid unit reference." % [x, z])
+	return false

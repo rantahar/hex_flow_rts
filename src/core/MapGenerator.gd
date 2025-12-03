@@ -2,15 +2,15 @@ extends Node3D
 
 class_name MapGenerator
 
-const Tile = preload("res://src/core/Tile.gd")
-
+const GameData = preload("res://data/game_data.gd")
 # 1. Exports
 @export var grass_mesh: Mesh
 @export var dirt_mesh: Mesh
 @export var stone_mesh: Mesh
 @export var water_mesh: Mesh
-@export var map_width: int = 20
-@export var map_height: int = 20
+
+var map_width: int = GameData.MAP_WIDTH
+var map_height: int = GameData.MAP_HEIGHT
 @export var hex_scale: float = 0.6
 
 @onready var grid: Grid = get_parent().get_node("Grid")

@@ -4,6 +4,7 @@ var flow_data: Dictionary = {}  # Format: {Vector2i(x,z): {cost: float, directio
 
 # Godot's built-in infinity constant for floats
 const INF: float = 1e20
+const DENSITY_COST_MULTIPLIER = 1
 
 # Calculates the flow field using Dijkstra's algorithm
 # starting from the targets with specified initial costs.
@@ -83,6 +84,21 @@ func calculate(targets: Dictionary, grid: Grid) -> void:
 			if new_cost < neighbor_flow_cost:
 				flow_data[neighbor_coords]["cost"] = new_cost
 				queue.append(neighbor_tile)
+
+	# 2.5. Apply friendly unit density cost penalty
+	for tile_to_check in all_tiles:
+		var coords = tile_to_check.get_coords()
+		if flow_data.has(coords):
+			var friendly_unit_count: int = 0
+			# NOTE: Assumes tile_to_check.occupied_slots is an array of units/objects with 'player_id'
+			if tile_to_check.occupied_slots:
+				for unit in tile_to_check.occupied_slots:
+					if unit != null and is_instance_valid(unit) and unit.player_id == player_id:
+						friendly_unit_count += 1
+			
+			if friendly_unit_count > 0:
+				var density_cost = friendly_unit_count * DENSITY_COST_MULTIPLIER
+				flow_data[coords]["cost"] += density_cost
 
 	# 3. Flow Direction Assignment
 	for tile_to_check in all_tiles:

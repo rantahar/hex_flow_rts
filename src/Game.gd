@@ -7,6 +7,7 @@ var players: Array[Player] = []
 var player_visualizers: Array[FlowFieldVisualizer] = []
 var current_visualization_player: int = 0
 var visualization_timer: Timer
+var flow_recalculation_timer: Timer
 
 # Clears existing players array and initializes players based on config.
 # player_configs: Array of Dictionary, e.g., [{id: 0, color: Color.RED, display_name: "Red Team"}]
@@ -22,7 +23,8 @@ func initialize_players(player_configs: Array) -> void:
 		
 		player_node.color = config["color"]
 		# player_node.target is set elsewhere, typically by user input.
-		player_node.flow_field = FlowField.new() # Needs FlowField import
+		player_node.flow_field = FlowField.new()
+		player_node.flow_field.player_id = player_node.id
 		player_node.units = []
 		player_node.resources = 0
 		
@@ -38,6 +40,27 @@ func get_player(player_id: int) -> Player:
 	
 	push_error("Attempted to access non-existent player with ID: %d" % player_id)
 	return null
+
+# Helper function to ensure a spawn tile is walkable, attempting to find a nearby tile if not.
+func _find_walkable_spawn_tile(grid: Grid, preferred_coords: Vector2i) -> Tile:
+	var tile = grid.tiles.get(preferred_coords)
+	if tile and tile.walkable:
+		return tile
+
+	# If the preferred tile is not walkable or doesn't exist, search nearby neighbors (1-ring distance)
+	push_warning("Preferred spawn tile (%s) is not walkable. Searching neighbors..." % preferred_coords)
+
+	# We need Tile coordinates and neighbor data to properly check neighbors.
+	# We will retrieve the Tile object first, if it exists.
+	if tile:
+		for neighbor_tile in tile.neighbors:
+			if neighbor_tile.walkable:
+				push_warning("Found walkable spawn tile at (%s)." % neighbor_tile.get_coords())
+				return neighbor_tile
+	
+	push_error("Could not find a walkable spawn tile near %s." % preferred_coords)
+	return null
+
 func _ready() -> void:
 	# Initialize players from centralized data
 	initialize_players(GameData.PLAYER_CONFIGS)
@@ -46,34 +69,30 @@ func _ready() -> void:
 	var player0 = get_player(0)
 	var player1 = get_player(1)
 
-	# Set targets (using original hardcoded targets)
-	if player0:
-		player0.target = Vector2i(5, 5)
-	if player1:
-		player1.target = Vector2i(15, 15)
+	var grid = map_node.get_node("Grid")
+	
+	# Coordinates for testing spawning and targeting (20x20 map)
+	const P0_TARGET_COORDS = Vector2i(15, 15)
+	const P1_TARGET_COORDS = Vector2i(5, 5)
+	const P0_SPAWN_COORDS = Vector2i(5, 5)
+	const P1_SPAWN_COORDS = Vector2i(15, 15)
+
+	# Set player targets and spawn tiles
+	if player0 and grid:
+		player0.target = P0_TARGET_COORDS
+		player0.spawn_tile = _find_walkable_spawn_tile(grid, P0_SPAWN_COORDS)
+		if player0.spawn_tile:
+			player0.calculate_flow(grid) # Trigger P0 flow calculation
 		
-	# TEST: Spawn units for player 0 and player 1
-	# Spawn a cluster of units around the starting position (e.g., at 1,1) for player 0
-	if player0 and is_instance_valid(map_node):
-		for x_offset in range(3):
-			for z_offset in range(3):
-				var spawn_x = 1 + x_offset
-				var spawn_z = 1 + z_offset
-				var unit = player0.spawn_unit(spawn_x, spawn_z, map_node, "infantry")
-				if unit:
-					player0.units.append(unit)
-		
-	# Spawn a cluster of units around the starting position (e.g., at 20,20) for player 1
-	if player1 and is_instance_valid(map_node):
-		for x_offset in range(3):
-			for z_offset in range(3):
-				var spawn_x = 20 + x_offset
-				var spawn_z = 20 + z_offset
-				var unit = player1.spawn_unit(spawn_x, spawn_z, map_node, "infantry")
-				if unit:
-					player1.units.append(unit)
+	if player1 and grid:
+		player1.target = P1_TARGET_COORDS
+		player1.spawn_tile = _find_walkable_spawn_tile(grid, P1_SPAWN_COORDS)
+		if player1.spawn_tile:
+			player1.calculate_flow(grid) # Trigger P1 flow calculation
+
+	# NOTE: Manual unit spawns removed as per task requirement.
 			
-	# Wait for specified delay before calculating flow fields
+	# Wait for specified delay before starting visualization setup
 	await get_tree().create_timer(GameData.START_DELAY_SECONDS).timeout
 	
 	_post_ready_setup()
@@ -87,9 +106,13 @@ func _post_ready_setup() -> void:
 	player_visualizers[0] = visualizer
 	var grid = map_node.get_node("Grid")
 	
-	# Calculate flow fields for all players
-	players[0].calculate_flow(grid) # Calculate P0 flow (will be visualized immediately)
-	players[1].calculate_flow(grid) # Calculate P1 flow
+	# Setup flow recalculation timer (needed for dynamic flow costs like unit density)
+	var FLOW_RECALC_INTERVAL = 2 # seconds
+	flow_recalculation_timer = Timer.new()
+	flow_recalculation_timer.wait_time = FLOW_RECALC_INTERVAL
+	flow_recalculation_timer.autostart = true
+	flow_recalculation_timer.connect("timeout", _on_flow_recalculation_timer_timeout)
+	add_child(flow_recalculation_timer)
 	
 	# Setup visualization timer
 	visualization_timer = Timer.new()
@@ -132,3 +155,15 @@ func _on_visualization_timer_timeout():
 	
 	# Update the visualizer's reference to the current player's flow field
 	current_visualizer.update_visualization(current_flow, grid, current_visualization_player)
+
+
+# Recalculates flow fields for all players periodically
+func _on_flow_recalculation_timer_timeout():
+	var grid = map_node.get_node("Grid")
+	if not grid:
+		push_error("Game: Grid node missing during flow recalculation.")
+		return
+		
+	for player in players:
+		if is_instance_valid(player):
+			player.calculate_flow(grid)

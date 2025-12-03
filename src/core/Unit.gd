@@ -7,30 +7,27 @@ var config: Dictionary = {}
 var unit_display_name: String = ""
 var unit_types = [] # Tags like "military", "scout"
 var player_id: int = 0
-var hex_x: int = 0
-var hex_z: int = 0
 var move_speed: float = 0.0
 var size_hex: float = 0.0 # Radius in hex units
 var max_health: float = 0.0
 var current_health: float = 0.0
 var scale_factor: float = 1.0 # Store scale factor
+var current_tile: Tile = null
 
 var formation_slot: int = -1
 var formation_position: Vector3 = Vector3.ZERO
 
 var is_moving: bool = false
 var target_world_pos: Vector3 = Vector3.ZERO
-var target_hex_coords: Vector2i = Vector2i.ZERO
 var grid: Grid = null
 
 var mesh_instance: MeshInstance3D
 var movement_timer: Timer
 
-func _init(unit_config: Dictionary, p_player_id: int, p_hex_x: int, p_hex_z: int, world_pos: Vector3):
+func _init(unit_config: Dictionary, p_player_id: int, p_current_tile: Tile, world_pos: Vector3):
 	config = unit_config
 	player_id = p_player_id
-	hex_x = p_hex_x
-	hex_z = p_hex_z
+	current_tile = p_current_tile
 	
 	# Initialize stats from config
 	move_speed = config.get("move_speed", 0.0)
@@ -119,8 +116,8 @@ func _physics_process(delta):
 		
 		if not arriving_at_formation_pos:
 			# We arrived at a new tile center, update coords and decide next move
-			hex_x = target_hex_coords.x
-			hex_z = target_hex_coords.y
+			# hex_x and hex_z are deprecated, we rely on current_tile reference updated via try_claim_new_slot
+			# We update hex_x/hex_z for coordinate tracking in this instance if needed, but not required by unit class itself
 			_move_to_next_tile()
 		
 		return
@@ -151,6 +148,22 @@ func _on_movement_check_timeout():
 	
 # Calculates the next tile to move to based on the player's flow field.
 # This function is called on arrival OR by the periodic movement timer when idle.
+# Attempts to claim a formation slot on a new tile. If successful, renounces the previous slot.
+func try_claim_new_slot(new_tile: Tile, old_tile: Tile) -> bool:
+	var new_slot = new_tile.claim_formation_slot(self)
+	
+	if new_slot != -1:
+		# 1. Deregister from current (old) tile
+		if formation_slot != -1:
+			old_tile.release_formation_slot(formation_slot)
+			
+		# 2. Update unit's slot state
+		formation_slot = new_slot
+		current_tile = new_tile
+		return true
+	
+	return false
+
 func _move_to_next_tile():
 	if not grid:
 		push_error("Unit %d: Grid is not initialized." % player_id)
@@ -169,73 +182,36 @@ func _move_to_next_tile():
 		return
 		
 	var flow_field = player.flow_field
+
+	# 2. Determine next tile from flow field
+	var next_tile: Tile = flow_field.get_next_tile(current_tile, grid)
+	if not next_tile:
+		# No valid next tile (e.g., at target or blocked)
+		print("Unit %d: No next tile from flow field. Stopping." % player_id)
+		is_moving = false
+		return
 	
-	# 2. Look up flow direction for current tile
-	var current_coords = Vector2i(hex_x, hex_z)
-	var current_tile = grid.tiles.get(current_coords)
-	
-	if not current_tile:
-		push_warning("Unit %d: Current tile (%s) not found in grid. Stopping." % [player_id, current_coords])
+	# 3. Check for enemy units on the next tile
+	if next_tile.has_enemy_units(player_id):
+		# Cannot move to a tile occupied by an enemy
+		print("Unit %d: Tile (%s) occupied by enemy unit. Stopping." % [player_id, next_tile.get_coords()])
 		is_moving = false
 		return
 		
-	# 3. Get next tile based on flow field and calculate next world position
-	var next_tile = flow_field.get_next_tile(current_tile, grid)
+	# 4. Check for available formation slot and claim it
+	if not try_claim_new_slot(next_tile, current_tile):
+		# Could not claim a slot on the next tile, likely full
+		print("Unit %d: Could not claim formation slot on Tile (%s). Stopping." % [player_id, next_tile.get_coords()])
+		is_moving = false
+		return
 	
-	# Determine if the unit is stopping on the current tile (no next tile defined by flow field)
-	var stopping_on_tile: bool = not next_tile
-	
-	# If leaving tile: release formation_slot if assigned
-	if not stopping_on_tile and formation_slot != -1:
-		current_tile.release_formation_slot(formation_slot)
-		formation_slot = -1
-		formation_position = Vector3.ZERO
-		
-	if stopping_on_tile:
-		# Unit is stopping.
-		if formation_slot != -1:
-			# Already stopped in formation, do nothing
-			is_moving = false
-			print("Unit %d (%s) at (%d, %d) stopped in formation." % [player_id, unit_display_name, current_coords.x, current_coords.y])
-			return
-		
-		# Try to claim a formation slot on the current tile
-		formation_slot = current_tile.claim_formation_slot()
-		
-		if formation_slot != -1:
-			# Successfully claimed slot. Calculate formation position and start moving towards it.
-			var pos_offset_2d: Vector2 = current_tile.FORMATION_POSITIONS[formation_slot]
-			var tile_height: float = get_parent().get_height_at_world_pos(current_tile.world_pos)
-			var unit_height: float = get_unit_height()
-			
-			# Calculate final resting world position
-			formation_position = Vector3(
-				current_tile.world_pos.x + pos_offset_2d.x,
-				tile_height + unit_height * 0.5,
-				current_tile.world_pos.z + pos_offset_2d.y
-			)
-			
-			is_moving = true
-			print("Unit %d (%s) at (%d, %d) claimed slot %d, moving to formation pos." % [player_id, unit_display_name, current_coords.x, current_coords.y, formation_slot])
-			return
-		else:
-			# No formation slot available (tile full)
-			is_moving = false
-			print("Unit %d (%s) at (%d, %d) stopping, tile full or no flow direction." % [player_id, unit_display_name, current_coords.x, current_coords.y])
-			return
-			
-	# If we reach here, we are moving to a NEXT tile (next_tile is valid)
-	var next_coords = next_tile.get_coords()
-	var next_world_pos = next_tile.world_pos
-	
-	# print("Unit %d at (%d, %d) calculated next move to (%d, %d)." % [player_id, current_coords.x, current_coords.y, next_coords.x, next_coords.y])
-	
-	# 4. Update target position (including height offset) and start moving
-	target_hex_coords = next_coords
-	
-	var tile_height: float = get_parent().get_height_at_world_pos(next_world_pos)
-	var unit_height: float = get_unit_height()
-	
-	target_world_pos = Vector3(next_world_pos.x, tile_height + unit_height * 0.5, next_world_pos.z)
+	var tile_position: Vector3 = next_tile.world_pos
+	formation_position = tile_position + Vector3(
+		next_tile.FORMATION_POSITIONS[formation_slot].x,
+		get_unit_height() / 2.0,
+		next_tile.FORMATION_POSITIONS[formation_slot].y
+	)
 	is_moving = true
-	# print("Unit %d starting movement." % player_id)
+	target_world_pos = formation_position
+	
+	return

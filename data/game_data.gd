@@ -67,6 +67,10 @@ const UNIT_TYPES = {
 # Defines the delay before game logic starts (e.g., flow field calculation)
 const START_DELAY_SECONDS: float = 1.0
 
+# Defines global map dimensions
+const MAP_WIDTH: int = 20
+const MAP_HEIGHT: int = 20
+
 # Defines configuration data for players
 const PLAYER_CONFIGS = [
 	{
