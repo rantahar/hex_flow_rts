@@ -12,7 +12,7 @@ var flow_field = null # Assumes FlowField is globally available or handled by Ga
 var units: Array = []
 var resources: int = 0
 var spawn_tile: Tile
-const SPAWN_INTERVAL: float = 2.0
+const SPAWN_INTERVAL: float = 1
 var spawn_timer: float = SPAWN_INTERVAL
 
 func _process(delta: float):
@@ -120,8 +120,6 @@ func spawn_unit(hex_x: int = -1, hex_z: int = -1, map_node: Node3D = null, unit_
 			tile_to_spawn_on.occupied_slots[slot] = unit
 			unit.formation_slot = slot
 			unit.current_tile = tile_to_spawn_on # Ensure current_tile is set for Unit.gd usage
-
-			print("Player %d spawned unit at (%s). Slot %d claimed." % [id, coords, slot])
 			
 			# Set unit position to its initial formation slot position
 			var pos_offset_2d: Vector2 = tile_to_spawn_on.FORMATION_POSITIONS[slot]
@@ -134,6 +132,8 @@ func spawn_unit(hex_x: int = -1, hex_z: int = -1, map_node: Node3D = null, unit_
 			# No need to set target_world_pos/is_moving here, unit will move to formation pos via _on_movement_check_timeout if needed
 			
 	
+	# Add the unit to the player's internal list for tracking and counting
+	units.append(unit)
 	return unit
 
 

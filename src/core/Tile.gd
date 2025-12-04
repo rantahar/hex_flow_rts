@@ -1,7 +1,5 @@
 class_name Tile
 
-const Grid = preload("res://src/core/Grid.gd")
-const Unit = preload("res://src/core/Unit.gd")
 const FORMATION_RADIUS: float = Grid.HEX_SCALE * 0.3
 
 # 6 positions in a radial hex pattern around tile center (radius ~0.3 * HEX_SCALE)
@@ -56,13 +54,17 @@ func release_formation_slot(slot_index: int):
 
 # Checks if this tile contains any units belonging to a different player.
 func has_enemy_units(player_id: int) -> bool:
-	print("Tile (%d, %d) checking for enemy units for player %d. Occupied slots: %s" % [x, z, player_id, occupied_slots])
 	for unit_reference in occupied_slots:
 		if unit_reference != null:
 			# Safety check: ensure unit_reference is a valid instance before accessing player_id
 			if is_instance_valid(unit_reference) and unit_reference.player_id != player_id:
-				print("Enemy detected on Tile (%d, %d): Unit ID %d vs Player ID %d" % [x, z, unit_reference.player_id, player_id])
 				return true
 			elif not is_instance_valid(unit_reference):
 				push_warning("Tile (%d, %d) occupied_slots contains an invalid unit reference." % [x, z])
 	return false
+
+func is_formation_full() -> bool:
+	for slot in occupied_slots:
+		if slot == null:
+			return false
+	return true

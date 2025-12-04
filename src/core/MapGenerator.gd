@@ -3,11 +3,7 @@ extends Node3D
 class_name MapGenerator
 
 const GameData = preload("res://data/game_data.gd")
-# 1. Exports
-@export var grass_mesh: Mesh
-@export var dirt_mesh: Mesh
-@export var stone_mesh: Mesh
-@export var water_mesh: Mesh
+
 
 var map_width: int = GameData.MAP_WIDTH
 var map_height: int = GameData.MAP_HEIGHT
@@ -20,13 +16,6 @@ var generated_tiles: Dictionary = {}
 # Constants for Pointy-Topped Hex Grid (assuming radius R=1)
 # 2. Generation Logic (using individual Node Instantiation)
 func generate_map():
-	var tile_meshes = [grass_mesh, dirt_mesh, stone_mesh, water_mesh]
-	tile_meshes.erase(null) # Remove null entries if user hasn't set all types
-	
-	if tile_meshes.is_empty():
-		push_error("No tile meshes are set.")
-		return
-		
 	generated_tiles.clear() # Clear previously generated tile data
 	
 	# Clear existing children
@@ -54,8 +43,19 @@ func generate_map():
 			# Instantiate MeshInstance3D
 			var tile_mesh_instance = MeshInstance3D.new()
 			
-			# Mesh: Set node.mesh = tile_mesh
-			var selected_mesh = tile_meshes.pick_random()
+			# Mesh: Select random tile type and load resource
+			var selected_tile_key = _get_weighted_random_tile_key()
+			if selected_tile_key.is_empty():
+				push_error("Failed to select a tile type.")
+				continue
+			var tile_def = GameData.TILES[selected_tile_key]
+			
+			var selected_mesh: Mesh = load(tile_def.mesh_path)
+			
+			if not selected_mesh:
+				push_error("Failed to load Mesh resource: %s. Skipping tile." % tile_def.mesh_path)
+				continue
+				
 			tile_mesh_instance.mesh = selected_mesh
 			
 			# Scale: Set node.scale
@@ -64,12 +64,14 @@ func generate_map():
 			# Rotation Fix: Set node.rotation_degrees.y = 90 (or similar)
 			tile_mesh_instance.rotation_degrees.y = 0.0
 			
-			# Add collision shape based on mesh geometry
-			tile_mesh_instance.create_trimesh_collision() # Requirement 1: Trimesh collision
-			
+			# Add visual node to the StaticBody3D
 			tile_root.add_child(tile_mesh_instance)
 			
+			# Add StaticBody3D to the scene tree (parent MapGenerator)
 			add_child(tile_root)
+			
+			# Add collision shape based on mesh geometry
+			tile_mesh_instance.create_trimesh_collision() # Requirement 1: Trimesh collision
 			
 			# Requirement 2: Store tile reference
 			var tile_data = Tile.new()
@@ -77,11 +79,10 @@ func generate_map():
 			tile_data.z = z
 			tile_data.world_pos = position
 			
-			# Set infinite cost for water tiles
-			if selected_mesh == water_mesh:
-				tile_data.walkable = false
-				tile_data.cost = Tile.INF # Tile.INF defined in Tile.gd
-				
+			# Apply tile data properties
+			tile_data.walkable = tile_def.walkable
+			tile_data.cost = tile_def.walk_cost
+			
 			tile_data.node = tile_root # Use the StaticBody3D (tile_root) as the node reference for lookup
 			
 			var coords = Vector2i(x, z)
@@ -89,3 +90,21 @@ func generate_map():
 
 func get_tiles() -> Dictionary:
 	return generated_tiles
+
+# Helper function to select a tile key based on defined weights.
+func _get_weighted_random_tile_key() -> String:
+	var weighted_list = []
+	var total_weight = 0
+
+	for key in GameData.TILES:
+		var weight = GameData.TILES[key].get("weight", 1) # Default weight of 1 if not specified
+		total_weight += weight
+		for _i in range(weight):
+			weighted_list.append(key)
+
+	if weighted_list.is_empty():
+		push_error("Weighted tile list is empty.")
+		return ""
+
+	# Randomly pick an element from the weighted list
+	return weighted_list.pick_random()

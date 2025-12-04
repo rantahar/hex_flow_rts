@@ -1,14 +1,10 @@
-[gd_scene load_steps=16 format=3 uid="uid://cmri410y4al53"]
+[gd_scene load_steps=12 format=3 uid="uid://cmri410y4al53"]
 
-[ext_resource type="ArrayMesh" uid="uid://bge3ba83iptit" path="res://assets/kenney_3d_hex/Models/OBJ format/grass.obj" id="1_e1o66"]
 [ext_resource type="Script" path="res://src/RTSCamera.gd" id="1_i1nf2"]
 [ext_resource type="Script" path="res://src/core/MapGenerator.gd" id="1_r4x5c"]
 [ext_resource type="Script" path="res://src/core/map.gd" id="2_ie3hc"]
 [ext_resource type="Script" path="res://src/core/Grid.gd" id="3_yrrol"]
 [ext_resource type="Script" path="res://src/ClickMarker.gd" id="4_5dpvh"]
-[ext_resource type="ArrayMesh" uid="uid://cuh1stj21kslt" path="res://assets/kenney_3d_hex/Models/OBJ format/dirt.obj" id="6_jnq6j"]
-[ext_resource type="ArrayMesh" uid="uid://b0gbe0wrwuiko" path="res://assets/kenney_3d_hex/Models/OBJ format/grass-hill.obj" id="7_o2svj"]
-[ext_resource type="ArrayMesh" uid="uid://rbv5osn8apoe" path="res://assets/kenney_3d_hex/Models/OBJ format/water.obj" id="8_sltmo"]
 [ext_resource type="Script" path="res://src/FlowFieldVisualizer.gd" id="9_83565"]
 [ext_resource type="Script" path="res://src/Game.gd" id="10_gds"]
 
@@ -53,10 +49,6 @@ script = ExtResource("3_yrrol")
 
 [node name="MapGenerator" type="Node3D" parent="Map"]
 script = ExtResource("1_r4x5c")
-grass_mesh = ExtResource("1_e1o66")
-dirt_mesh = ExtResource("6_jnq6j")
-stone_mesh = ExtResource("7_o2svj")
-water_mesh = ExtResource("8_sltmo")
 
 [node name="FlowVisualizer" type="Node3D" parent="Map"]
 script = ExtResource("9_83565")

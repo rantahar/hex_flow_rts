@@ -8,6 +8,8 @@ var player_visualizers: Array[FlowFieldVisualizer] = []
 var current_visualization_player: int = 0
 var visualization_timer: Timer
 var flow_recalculation_timer: Timer
+var game_time_seconds: int = 0
+var game_clock_timer: Timer
 
 # Clears existing players array and initializes players based on config.
 # player_configs: Array of Dictionary, e.g., [{id: 0, color: Color.RED, display_name: "Red Team"}]
@@ -104,22 +106,28 @@ func _post_ready_setup() -> void:
 	
 	var visualizer = map_node.get_node("FlowVisualizer")
 	player_visualizers[0] = visualizer
-	var grid = map_node.get_node("Grid")
 	
 	# Setup flow recalculation timer (needed for dynamic flow costs like unit density)
 	var FLOW_RECALC_INTERVAL = 2 # seconds
 	flow_recalculation_timer = Timer.new()
 	flow_recalculation_timer.wait_time = FLOW_RECALC_INTERVAL
 	flow_recalculation_timer.autostart = true
-	flow_recalculation_timer.connect("timeout", _on_flow_recalculation_timer_timeout)
+	flow_recalculation_timer.timeout.connect(_on_flow_recalculation_timer_timeout)
 	add_child(flow_recalculation_timer)
 	
 	# Setup visualization timer
 	visualization_timer = Timer.new()
 	visualization_timer.wait_time = 2.0
 	visualization_timer.autostart = true
-	visualization_timer.connect("timeout", _on_visualization_timer_timeout)
+	visualization_timer.timeout.connect(_on_visualization_timer_timeout)
 	add_child(visualization_timer)
+
+	# Setup game clock timer (1 second interval)
+	game_clock_timer = Timer.new()
+	game_clock_timer.wait_time = 1.0
+	game_clock_timer.autostart = true
+	game_clock_timer.timeout.connect(_on_game_clock_timer_timeout)
+	add_child(game_clock_timer)
 	
 	current_visualization_player = 1
 	_on_visualization_timer_timeout()
@@ -167,3 +175,17 @@ func _on_flow_recalculation_timer_timeout():
 	for player in players:
 		if is_instance_valid(player):
 			player.calculate_flow(grid)
+
+# Called every second to update game time and print status
+func _on_game_clock_timer_timeout() -> void:
+	game_time_seconds += 1
+	var minutes = floor(game_time_seconds / 60)
+	var seconds = game_time_seconds % 60
+	var game_clock_string = "%02d:%02d" % [minutes, seconds]
+
+	var total_units: int = 0
+	for player in players:
+		if is_instance_valid(player):
+			total_units += player.units.size()
+
+	print("Game Clock: %s | Total Units: %d" % [game_clock_string, total_units])

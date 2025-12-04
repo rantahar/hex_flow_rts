@@ -16,6 +16,7 @@ const ZOOM_MAX = 50.0
 # State variables
 var is_middle_mouse_down: bool = false
 var last_mouse_position: Vector2 = Vector2.ZERO
+var map_bounds: Dictionary = {}
 
 func _ready():
 	if not is_instance_valid(grid_registry):
@@ -28,6 +29,9 @@ func _ready():
 		else:
 			push_error("Could not find Map node.")
 			
+	if is_instance_valid(grid_registry):
+		map_bounds = grid_registry.get_map_bounds()
+		
 	# Ensure the camera is set up for 3D navigation
 	# Using 'ui' actions for movement, ensure they are mapped in Project Settings -> Input Map
 	make_current()
@@ -90,6 +94,9 @@ func _handle_movement(delta: float):
 
 		# Apply translation
 		position += final_direction
+		
+		# Clamp camera position to map boundaries
+		_clamp_position()
 
 func _handle_middle_mouse_drag(event):
 	if event is InputEventMouseButton:
@@ -117,6 +124,9 @@ func _handle_middle_mouse_drag(event):
 		
 		position += pan_x + pan_z
 		last_mouse_position = current_mouse_position
+		
+		# Clamp camera position to map boundaries
+		_clamp_position()
 
 func _handle_zoom(event):
 	if event is InputEventMouseButton:
@@ -138,6 +148,16 @@ func _handle_zoom(event):
 				position.y = ZOOM_MIN
 			elif new_position.y > ZOOM_MAX:
 				position.y = ZOOM_MAX
+				
+func _clamp_position():
+	if map_bounds.is_empty():
+		return
+		
+	# Clamp X coordinate
+	position.x = clamp(position.x, map_bounds.x_min, map_bounds.x_max)
+	
+	# Clamp Z coordinate
+	position.z = clamp(position.z, map_bounds.z_min, map_bounds.z_max)
 
 func _handle_raycast_click(event):
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:

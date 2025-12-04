@@ -6,7 +6,35 @@ const HEX_SCALE: float = 0.6
 const X_SPACING: float = 1.732 * 0.57735  # sqrt(3) * 0.57735
 const Z_SPACING: float = 1.5 * 0.57735
 
-const Tile = preload("res://src/core/Tile.gd")
+var MAP_X_MIN: float = 0.0
+var MAP_X_MAX: float = 0.0
+var MAP_Z_MIN: float = 0.0
+var MAP_Z_MAX: float = 0.0
+
+func _init():
+	# Load game data to get map dimensions
+	# Assumes data/game_data.gd is available
+	var game_data = load("res://data/game_data.gd")
+	var W = game_data.MAP_WIDTH
+	var H = game_data.MAP_HEIGHT
+	
+	# Calculate a boundary margin based on half of the tile spacing to ensure the camera center
+	# always sees the edge tiles fully.
+	var CAMERA_MARGIN_X = X_SPACING * 0.5
+	var CAMERA_MARGIN_Z = Z_SPACING * 0.5
+
+	# Calculate max coordinate for tile centers:
+	# X_MAX_CENTER: Center of the right-most tile (which is offset by 0.5 in an odd row, max x=W-1)
+	var X_MAX_CENTER = (float(W) - 0.5) * X_SPACING
+	# Z_MAX_CENTER: Center of the bottom-most tile (max z=H-1)
+	var Z_MAX_CENTER = float(H - 1) * Z_SPACING
+	
+	# Apply margins to define the camera bounds (camera center position)
+	# The X and Z MIN are 0 (center of tile 0,0) minus the margin.
+	MAP_X_MIN = 0.0 - CAMERA_MARGIN_X
+	MAP_X_MAX = X_MAX_CENTER + CAMERA_MARGIN_X
+	MAP_Z_MIN = 0.0 - CAMERA_MARGIN_Z
+	MAP_Z_MAX = Z_MAX_CENTER + CAMERA_MARGIN_Z
 
 # Hex grid neighbor offsets (Odd-R offset coordinates)
 # Used to determine coordinates of neighboring tiles.
@@ -55,6 +83,13 @@ func find_tile_by_node(node: Node3D) -> Vector2i:
 	# Return an invalid coordinate to indicate tile not found, assuming x, z >= 0.
 	return Vector2i(-1, -1)
 
+func get_map_bounds() -> Dictionary:
+	return {
+		"x_min": MAP_X_MIN,
+		"x_max": MAP_X_MAX,
+		"z_min": MAP_Z_MIN,
+		"z_max": MAP_Z_MAX
+	}
 
 func hex_to_world(x: int, z: int) -> Vector3:
 	var coords = Vector2i(x, z)

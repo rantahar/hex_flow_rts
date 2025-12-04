@@ -15,7 +15,7 @@ const UNIT_TYPES = {
 		# Number of formation slots this unit occupies
 		"formation_size": 1,
 		# Maximum health points
-		"max_health": 50.0,
+		"max_health": 100.0,
 		# Damage dealt per successful attack
 		"attack_damage": 10.0,
 		# Maximum distance to attack target, measured in hex units
@@ -38,7 +38,7 @@ const UNIT_TYPES = {
 		"size": 0.8,
 		# Number of formation slots this unit occupies
 		"formation_size": 1,
-		"max_health": 200.0,
+		"max_health": 500.0,
 		"attack_damage": 40.0,
 		"attack_range": 4.0,
 		"attack_cooldown": 3.0,
@@ -55,7 +55,7 @@ const UNIT_TYPES = {
 		"size": 0.4,
 		# Number of formation slots this unit occupies
 		"formation_size": 1,
-		"max_health": 30.0,
+		"max_health": 80.0,
 		"attack_damage": 0.0,
 		"attack_range": 0.0,
 		"attack_cooldown": 0.0,
@@ -64,6 +64,37 @@ const UNIT_TYPES = {
 		"unit_types": ["scout"]
 	},
 }
+const TILES = {
+	"grass": {
+		"mesh_path": "res://assets/kenney_3d_hex/Models/OBJ format/grass.obj",
+		"type_name": "grass",
+		"walk_cost": 1.0,
+		"walkable": true,
+		"weight": 5, # Higher probability
+	},
+	"dirt": {
+		"mesh_path": "res://assets/kenney_3d_hex/Models/OBJ format/dirt.obj",
+		"type_name": "dirt",
+		"walk_cost": 1.0,
+		"walkable": true,
+		"weight": 5, # Higher probability
+	},
+	"mountain": {
+		"mesh_path": "res://assets/kenney_3d_hex/Models/OBJ format/grass-hill.obj",
+		"type_name": "mountain",
+		"walk_cost": 2.0,
+		"walkable": true,
+		"weight": 1, # Lower probability
+	},
+	"water": {
+		"mesh_path": "res://assets/kenney_3d_hex/Models/OBJ format/water.obj",
+		"type_name": "water",
+		"walk_cost": 1e20, # Represents infinite cost (Tile.INF)
+		"walkable": false,
+		"weight": 1, # Lower probability
+	},
+}
+
 # Defines the delay before game logic starts (e.g., flow field calculation)
 const START_DELAY_SECONDS: float = 1.0
 
