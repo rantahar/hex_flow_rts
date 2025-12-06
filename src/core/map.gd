@@ -4,6 +4,9 @@ extends Node3D
 @onready var grid: Grid = $Grid
 
 func _ready():
+	"""
+	Initializes the map by generating the tiles and registering them with the grid system.
+	"""
 	# 1. Generate the map (which also instantiates tile nodes)
 	map_generator.generate_map()
 	
@@ -13,6 +16,16 @@ func _ready():
 # Finds the actual height (Y-coordinate) of the terrain at the given planar world position (x, z).
 # This performs a raycast to hit the terrain mesh, accounting for uneven terrain.
 func get_height_at_world_pos(world_pos: Vector3) -> float:
+	"""
+	Finds the actual height (Y-coordinate) of the terrain at the given planar world position (x, z)
+	by performing a vertical raycast.
+
+	Arguments:
+	- world_pos (Vector3): The world position (X and Z components are used).
+
+	Returns:
+	- float: The Y-coordinate of the terrain intersection point, or 0.0 if no terrain is hit.
+	"""
 	if not is_inside_tree():
 		push_error("Map node is not in tree, cannot perform raycast.")
 		return 0.0

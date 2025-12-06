@@ -16,6 +16,11 @@ var generated_tiles: Dictionary = {}
 # Constants for Pointy-Topped Hex Grid (assuming radius R=1)
 # 2. Generation Logic (using individual Node Instantiation)
 func generate_map():
+	"""
+	Generates the entire hexagonal map grid by iterating through coordinates (x, z).
+	For each coordinate, it instantiates a visual tile (StaticBody3D + MeshInstance3D),
+	applies a random weighted tile type, sets up collision, and creates the Tile data object.
+	"""
 	generated_tiles.clear() # Clear previously generated tile data
 	
 	# Clear existing children
@@ -89,10 +94,23 @@ func generate_map():
 			generated_tiles[coords] = tile_data
 
 func get_tiles() -> Dictionary:
+	"""
+	Returns the dictionary of generated Tile objects keyed by their coordinates.
+
+	Returns:
+	- Dictionary: {Vector2i: Tile} mapping.
+	"""
 	return generated_tiles
 
 # Helper function to select a tile key based on defined weights.
 func _get_weighted_random_tile_key() -> String:
+	"""
+	Selects a tile type key from GameData.TILES using weighted random sampling.
+	Higher weight values increase the probability of selection.
+
+	Returns:
+	- String: The key of the randomly selected tile type, or "" on error.
+	"""
 	var weighted_list = []
 	var total_weight = 0
 

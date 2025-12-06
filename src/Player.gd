@@ -4,6 +4,7 @@ extends Node3D
 # Exported player ID.
 @export var id: int
 const GameData = preload("res://data/game_data.gd")
+const GameConfig = preload("res://data/game_config.gd")
 
 # Required for Game.gd initialization logic
 var color: Color = Color.WHITE
@@ -12,17 +13,22 @@ var flow_field = null # Assumes FlowField is globally available or handled by Ga
 var units: Array = []
 var resources: int = 0
 var spawn_tile: Tile
-const SPAWN_INTERVAL: float = 1
-var spawn_timer: float = SPAWN_INTERVAL
+var spawn_timer: float = GameConfig.SPAWN_INTERVAL
 
 func _process(delta: float):
+	"""
+	Called every frame. Handles periodic unit spawning if a spawn tile is set.
+
+	Arguments:
+	- delta (float): The elapsed time since the previous frame.
+	"""
 	if not spawn_tile:
 		return
 		
 	spawn_timer += delta
 	
-	if spawn_timer >= SPAWN_INTERVAL:
-		spawn_timer -= SPAWN_INTERVAL
+	if spawn_timer >= GameConfig.SPAWN_INTERVAL:
+		spawn_timer -= GameConfig.SPAWN_INTERVAL
 		
 		# NOTE: We need a reference to the Grid/Map node to spawn.
 		# Assuming the parent of Player is Game, and Game has a reference to Map/Grid.
@@ -51,6 +57,19 @@ func _process(delta: float):
 
 # Method: spawn_unit(hex_x: int, hex_z: int, map_node: Node3D) -> Unit
 func spawn_unit(hex_x: int = -1, hex_z: int = -1, map_node: Node3D = null, unit_type: String = "infantry"):
+	"""
+	Instantiates a new unit of the specified type at the designated spawn tile (or given coordinates).
+	The unit is initialized with player ID, added to the map, positioned in a formation slot, and added to the player's unit list.
+
+	Arguments:
+	- hex_x (int): Optional. The X grid coordinate for spawning. Defaults to -1 (uses spawn_tile).
+	- hex_z (int): Optional. The Z grid coordinate for spawning. Defaults to -1 (uses spawn_tile).
+	- map_node (Node3D): The Map node instance, needed for adding the unit to the scene and raycasting.
+	- unit_type (String): The key string for the unit configuration in GameData.UNIT_TYPES.
+
+	Returns:
+	- Unit: The newly created Unit instance, or null if spawning fails.
+	"""
 	# Determine the tile to spawn on
 	var tile_to_spawn_on: Tile
 	if hex_x == -1 or hex_z == -1:
@@ -143,6 +162,12 @@ func spawn_unit(hex_x: int = -1, hex_z: int = -1, map_node: Node3D = null, unit_
 # 2. Creates targets dictionary {target_tile: 0.0}
 # 3. Calls flow_field.calculate(targets, grid)
 func calculate_flow(grid: Grid) -> void:
+	"""
+	Initiates the calculation of the player's flow field, targeting the player's designated `target` coordinates.
+
+	Arguments:
+	- grid (Grid): The map grid containing all Tile data required for pathfinding.
+	"""
 	# 1. Validation: check grid not null
 	if not grid:
 		push_error("Player %d.calculate_flow: Grid is null." % id)

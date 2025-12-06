@@ -14,6 +14,9 @@ const HEIGHT_ABOVE_UNIT_FACTOR: float = 1.5
 var sprite: Sprite3D
 
 func _init():
+	"""
+	Constructor. Initializes the Sprite3D node and sets up its basic properties like billboard mode and pixel size.
+	"""
 	# Create new Sprite3D node
 	sprite = Sprite3D.new()
 	
@@ -29,6 +32,12 @@ func _init():
 
 # Adds a function called setup that takes unit_size as Vector3 parameter
 func setup(unit_size: Vector3):
+	"""
+	Configures the health bar dimensions and vertical position relative to the unit size.
+
+	Arguments:
+	- unit_size (Vector3): The scaled AABB size of the associated unit mesh.
+	"""
 	# Calculate max_width based on unit_size.x, for example max_width = unit_size.x * 0.8
 	max_width = unit_size.x
 	
@@ -42,6 +51,14 @@ func setup(unit_size: Vector3):
 
 # Create update_health function that takes current health and maximum health as parameters
 func update_health(current_health: float, maximum_health: float):
+	"""
+	Generates a new ImageTexture to visually represent the current health percentage.
+	The bar color interpolates from red (low health) to green (full health).
+
+	Arguments:
+	- current_health (float): The current health value of the unit.
+	- maximum_health (float): The maximum possible health value.
+	"""
 	# Calculate health percentage as current divided by maximum
 	var health_percentage: float = current_health / maximum_health
 	health_percentage = clampf(health_percentage, 0.0, 1.0) # Ensure it's between 0 and 1

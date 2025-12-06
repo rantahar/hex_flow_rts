@@ -1,6 +1,7 @@
 extends Node3D
 class_name Game
 const GameData = preload("res://data/game_data.gd")
+const GameConfig = preload("res://data/game_config.gd")
 
 @onready var map_node = $Map
 var players: Array[Player] = []
@@ -14,6 +15,13 @@ var game_clock_timer: Timer
 # Clears existing players array and initializes players based on config.
 # player_configs: Array of Dictionary, e.g., [{id: 0, color: Color.RED, display_name: "Red Team"}]
 func initialize_players(player_configs: Array) -> void:
+	"""
+	Clears existing players and initializes new Player instances based on the provided configurations.
+	Sets up flow fields and adds player nodes to the scene tree.
+
+	Arguments:
+	- player_configs (Array): Array of player configuration dictionaries.
+	"""
 	players.clear()
 	
 	for config in player_configs:
@@ -37,6 +45,15 @@ func initialize_players(player_configs: Array) -> void:
 
 # Returns a player object based on ID, assuming ID matches index for simplicity.
 func get_player(player_id: int) -> Player:
+	"""
+	Retrieves a player object by their ID.
+
+	Arguments:
+	- player_id (int): The ID of the player to retrieve.
+
+	Returns:
+	- Player: The Player instance corresponding to the ID, or null if not found.
+	"""
 	if player_id >= 0 and player_id < players.size():
 		return players[player_id]
 	
@@ -45,6 +62,17 @@ func get_player(player_id: int) -> Player:
 
 # Helper function to ensure a spawn tile is walkable, attempting to find a nearby tile if not.
 func _find_walkable_spawn_tile(grid: Grid, preferred_coords: Vector2i) -> Tile:
+	"""
+	Helper function to find a walkable spawn tile, starting at a preferred coordinate.
+	If the preferred tile is unwalkable, searches immediately adjacent neighbor tiles.
+
+	Arguments:
+	- grid (Grid): The grid instance containing all tiles.
+	- preferred_coords (Vector2i): The desired grid coordinates for the spawn tile.
+
+	Returns:
+	- Tile: A walkable Tile object, or null if no walkable tile is found nearby.
+	"""
 	var tile = grid.tiles.get(preferred_coords)
 	if tile and tile.walkable:
 		return tile
@@ -64,6 +92,11 @@ func _find_walkable_spawn_tile(grid: Grid, preferred_coords: Vector2i) -> Tile:
 	return null
 
 func _ready() -> void:
+	"""
+	Called when the node enters the scene tree for the first time.
+	Initializes players, sets targets and spawn points, calculates initial flow fields,
+	and initiates the post-ready setup after a brief delay.
+	"""
 	# Initialize players from centralized data
 	initialize_players(GameData.PLAYER_CONFIGS)
 	
@@ -101,6 +134,10 @@ func _ready() -> void:
 
 # Initializes flow fields and visualization after a delay
 func _post_ready_setup() -> void:
+	"""
+	Initializes periodic timers for flow field recalculation, visualization cycling, and game clock.
+	Called after the map and players are fully set up.
+	"""
 	# Initialize flow fields
 	player_visualizers.resize(1)
 	
@@ -108,9 +145,8 @@ func _post_ready_setup() -> void:
 	player_visualizers[0] = visualizer
 	
 	# Setup flow recalculation timer (needed for dynamic flow costs like unit density)
-	var FLOW_RECALC_INTERVAL = 2 # seconds
 	flow_recalculation_timer = Timer.new()
-	flow_recalculation_timer.wait_time = FLOW_RECALC_INTERVAL
+	flow_recalculation_timer.wait_time = GameConfig.FLOW_RECALC_INTERVAL
 	flow_recalculation_timer.autostart = true
 	flow_recalculation_timer.timeout.connect(_on_flow_recalculation_timer_timeout)
 	add_child(flow_recalculation_timer)
@@ -134,6 +170,10 @@ func _post_ready_setup() -> void:
 
 # Cycles visualization between players P0 and P1
 func _on_visualization_timer_timeout():
+	"""
+	Timer callback to cycle the flow field visualization between different players.
+	Updates the FlowFieldVisualizer node to display the current player's flow field.
+	"""
 	var next_player_id = (current_visualization_player + 1) % players.size()
 	current_visualization_player = next_player_id
 	
@@ -167,6 +207,10 @@ func _on_visualization_timer_timeout():
 
 # Recalculates flow fields for all players periodically
 func _on_flow_recalculation_timer_timeout():
+	"""
+	Timer callback to periodically trigger flow field recalculation for all active players.
+	This is important for handling dynamic map costs (e.g., changing unit density).
+	"""
 	var grid = map_node.get_node("Grid")
 	if not grid:
 		push_error("Game: Grid node missing during flow recalculation.")
@@ -178,6 +222,10 @@ func _on_flow_recalculation_timer_timeout():
 
 # Called every second to update game time and print status
 func _on_game_clock_timer_timeout() -> void:
+	"""
+	Timer callback executed every second to update the in-game clock and display
+	the current game time and total unit count.
+	"""
 	game_time_seconds += 1
 	var minutes = floor(game_time_seconds / 60)
 	var seconds = game_time_seconds % 60

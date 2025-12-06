@@ -6,6 +6,10 @@ const MARKER_LIFETIME = 2.0
 var camera_node: Node3D = null
 
 func _ready():
+	"""
+	Called when the node is added to the scene tree.
+	Connects to the `hex_clicked` signal of the RTSCamera node, if the path is valid.
+	"""
 	# Connect to the RTSCamera's signal if the path is provided
 	if not camera_path.is_empty():
 		camera_node = get_node_or_null(camera_path)
@@ -18,6 +22,13 @@ func _ready():
 			push_error("RTSCamera node not found at path '"+str(camera_path)+"' or does not emit 'hex_clicked'. Marker functionality disabled.")
 
 func _on_hex_clicked(tile: Tile):
+	"""
+	Handles the `hex_clicked` signal from the camera. Moves the marker to the clicked tile's position,
+	makes it visible, and starts a timer to hide it after a set duration.
+
+	Arguments:
+	- tile (Tile): The Tile object that was clicked.
+	"""
 	if not tile:
 		return
 		
@@ -32,5 +43,8 @@ func _on_hex_clicked(tile: Tile):
 	timer.timeout.connect(_on_timer_timeout)
 
 func _on_timer_timeout():
+	"""
+	Callback for the visibility timer. Hides the click marker.
+	"""
 	# Hide the marker.
 	visible = false

@@ -4,14 +4,22 @@ var flow_data: Dictionary = {}  # Format: {Vector2i(x,z): {cost: float, directio
 
 # Godot's built-in infinity constant for floats
 const INF: float = 1e20
-const DENSITY_COST_MULTIPLIER = 5
-const FULL_FORMATION_MULTIPLIER = 100
+const GameConfig = preload("res://data/game_config.gd")
 
 # Calculates the flow field using Dijkstra's algorithm
 # starting from the targets with specified initial costs.
 # targets: {Tile: float} - Dictionary mapping target Tiles to their initial flow cost (priority).
 # Stores flow field data internally in flow_data structure.
 func calculate(targets: Dictionary, grid: Grid) -> void:
+	"""
+	Calculates the flow field (integration field) using a modified Dijkstra's algorithm.
+	This flow field determines the lowest-cost path from any tile back to the target tiles.
+	Enemy-occupied tiles are automatically added as targets (cost 0.0) to encourage unit movement towards conflict.
+
+	Arguments:
+	- targets (Dictionary): Map of {Tile: float} where the float is the initial cost (priority) of the target.
+	- grid (Grid): The map grid containing all Tile objects.
+	"""
 	if not grid:
 		push_error("FlowField.calculate: Grid is null")
 		return
@@ -96,7 +104,7 @@ func calculate(targets: Dictionary, grid: Grid) -> void:
 						combat_unit_count += 1
 				
 				if combat_unit_count > 0:
-					density_cost = combat_unit_count * DENSITY_COST_MULTIPLIER
+					density_cost = combat_unit_count * GameConfig.DENSITY_COST_MULTIPLIER
 					# Removed counting of reserved formation slots
 					
 			var new_cost: float = current_cost + neighbor_tile.cost + density_cost
@@ -141,6 +149,15 @@ func calculate(targets: Dictionary, grid: Grid) -> void:
 ## Query Methods ##
 
 func get_flow_cost(tile: Tile) -> float:
+	"""
+	Retrieves the calculated cost (distance) for a tile to reach the nearest flow target.
+
+	Arguments:
+	- tile (Tile): The tile to query.
+
+	Returns:
+	- float: The flow cost, or INF if the tile is unreachable or invalid.
+	"""
 	if not tile:
 		push_error("FlowField.get_flow_cost: Tile is null")
 		return INF
@@ -150,6 +167,16 @@ func get_flow_cost(tile: Tile) -> float:
 	return INF
 
 func get_next_tile(current_tile: Tile, grid: Grid) -> Tile:
+	"""
+	Determines the next optimal tile to move to from the current tile based on the flow direction.
+
+	Arguments:
+	- current_tile (Tile): The tile the unit is currently on.
+	- grid (Grid): The map grid for coordinate lookup.
+
+	Returns:
+	- Tile: The next Tile instance to move towards, or null if at the target or flow direction is undefined.
+	"""
 	var flow_direction = get_flow_direction(current_tile)
 	if flow_direction == Vector2i.ZERO:
 		return null
@@ -157,6 +184,16 @@ func get_next_tile(current_tile: Tile, grid: Grid) -> Tile:
 	var next_coords = current_tile.get_coords() + flow_direction
 	return grid.tiles.get(next_coords) as Tile
 func get_flow_direction(tile: Tile) -> Vector2i:
+	"""
+	Retrieves the calculated flow direction (offset vector) for a given tile.
+	This vector points from the current tile to the neighbor with the lowest cost.
+
+	Arguments:
+	- tile (Tile): The tile to query.
+
+	Returns:
+	- Vector2i: The flow direction offset, or Vector2i.ZERO if undefined (e.g., at target).
+	"""
 	if not tile:
 		push_error("FlowField.get_flow_direction: Tile is null")
 		return Vector2i.ZERO
@@ -166,6 +203,15 @@ func get_flow_direction(tile: Tile) -> Vector2i:
 	return Vector2i.ZERO
 
 func get_flow_data(coords: Vector2i): # -> Dictionary or null
+	"""
+	Retrieves the raw flow data (cost and direction) for a tile coordinate.
+
+	Arguments:
+	- coords (Vector2i): The grid coordinates (x, z).
+
+	Returns:
+	- Dictionary or null: The flow data dictionary, or null if coordinates are not in the field.
+	"""
 	if flow_data.has(coords):
 		return flow_data[coords]
 	return null

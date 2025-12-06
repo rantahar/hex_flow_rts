@@ -31,9 +31,20 @@ var grid: Grid = null
 
 var mesh_instance: MeshInstance3D
 var movement_timer: Timer
+var attack_check_timer: Timer
 
 
 func _init(unit_config: Dictionary, p_player_id: int, p_current_tile: Tile, world_pos: Vector3):
+	"""
+	Initializes the unit with configuration, player ID, starting tile, and world position.
+	Sets up unit stats, mesh instance with scaling, health bar, and muzzle flash.
+
+	Arguments:
+	- unit_config (Dictionary): Configuration dictionary containing unit stats (e.g., move_speed, max_health, mesh_path).
+	- p_player_id (int): The ID of the player who owns this unit.
+	- p_current_tile (Tile): The tile the unit is currently standing on.
+	- world_pos (Vector3): The initial world position of the unit (planar X/Z, Y is corrected later).
+	"""
 	config = unit_config
 	player_id = p_player_id
 	current_tile = p_current_tile
@@ -50,22 +61,30 @@ func _init(unit_config: Dictionary, p_player_id: int, p_current_tile: Tile, worl
 	unit_display_name = config.get("display_name", "Unit")
 	unit_types = config.get("unit_types", []) # Remove type hint on declaration to prevent runtime error
 	
-	# Set up periodic movement checks for military units
-	if unit_types.has("military"):
-		movement_timer = Timer.new()
-		movement_timer.wait_time = 0.5 # Check every half second when idle
-		movement_timer.autostart = true
-		movement_timer.connect("timeout", _on_movement_check_timeout)
-		add_child(movement_timer)
-	
 	# Set position to planar world position for now. Height will be corrected after adding to tree.
 	position = Vector3(world_pos.x, world_pos.y, world_pos.z)
+
+	# Call initialization helpers
+	_setup_mesh(config)
+	_setup_health_bar()
+	_setup_combat_effects()
+	_setup_movement_timer()
+
+# --- Initialization Helpers ---
+
+func _setup_mesh(unit_config: Dictionary) -> void:
+	"""
+	Loads the unit's 3D mesh, calculates the necessary scale factor based on
+	the configured hex size, and creates and adds the MeshInstance3D node.
 	
-	# Load mesh resource dynamically
-	var mesh_path: String = config.get("mesh_path", "")
+	Arguments:
+	- unit_config (Dictionary): Configuration dictionary containing mesh_path and size_hex.
+	"""
+	var mesh_path: String = unit_config.get("mesh_path", "")
 	var mesh: Mesh = load(mesh_path)
 	if not mesh:
 		push_error("Unit %s: Failed to load mesh at path: %s" % [unit_display_name, mesh_path])
+		return
 	
 	# Create mesh instance
 	mesh_instance = MeshInstance3D.new()
@@ -89,7 +108,12 @@ func _init(unit_config: Dictionary, p_player_id: int, p_current_tile: Tile, worl
 	mesh_instance.scale = Vector3(scale_factor, scale_factor, scale_factor)
 	add_child(mesh_instance)
 
-	   # Health Bar setup
+func _setup_health_bar() -> void:
+	"""
+	Creates and configures the HealthBar3D node based on the scaled unit mesh size.
+	Initializes the health bar display.
+	"""
+	# Health Bar setup
 	health_bar = HealthBar3D.new()
 	add_child(health_bar)
 	
@@ -100,6 +124,11 @@ func _init(unit_config: Dictionary, p_player_id: int, p_current_tile: Tile, worl
 	health_bar.setup(scaled_unit_size)
 	
 	health_bar.update_health(health, max_health)
+
+func _setup_combat_effects() -> void:
+	"""
+	Sets up the OmniLight3D (muzzle flash) and the MuzzleFlashTimer for visual feedback during attacks.
+	"""
 	# Muzzle Flash setup (OmniLight3D)
 	muzzle_flash = OmniLight3D.new()
 	muzzle_flash.name = "MuzzleFlash"
@@ -117,8 +146,35 @@ func _init(unit_config: Dictionary, p_player_id: int, p_current_tile: Tile, worl
 	muzzle_flash_timer.connect("timeout", _on_muzzle_flash_timeout)
 	add_child(muzzle_flash_timer)
 
+func _setup_movement_timer() -> void:
+	"""
+	Sets up the periodic movement check timer and the attack check timer if the unit
+	is tagged as "military".
+	"""
+	if unit_types.has("military"):
+		# Movement Timer setup
+		movement_timer = Timer.new()
+		movement_timer.wait_time = 0.5 # Check every half second when idle
+		movement_timer.autostart = true
+		movement_timer.connect("timeout", _on_movement_check_timeout)
+		add_child(movement_timer)
+		
+		# Attack Check Timer setup
+		attack_check_timer = Timer.new()
+		attack_check_timer.wait_time = 0.25
+		attack_check_timer.autostart = false
+		attack_check_timer.connect("timeout", _on_attack_check_timeout)
+		add_child(attack_check_timer)
+
 # Called when this unit takes damage.
 func take_damage(amount: float):
+	"""
+	Reduces the unit's health by the specified amount and updates the health bar.
+	If health drops to 0 or below, the unit is destroyed.
+
+	Arguments:
+	- amount (float): The amount of damage to inflict.
+	"""
 	health -= amount
 	# Clamp current_health to minimum of 0
 	health = maxi(0.0, health)
@@ -149,6 +205,10 @@ func take_damage(amount: float):
 		queue_free()
 
 func _ready():
+	"""
+	Called when the node enters the scene tree for the first time.
+	Initializes the Grid reference and corrects the unit's height based on the ground level.
+	"""
 	# Unit initialization is handled in _init().
 	var map_node = get_parent()
 	if map_node and is_instance_valid(map_node.get_node_or_null("Grid")):
@@ -163,38 +223,24 @@ func _ready():
 
 # Returns the unit's height based on its mesh and scale factor
 func get_unit_height() -> float:
+	"""
+	Calculates the total height of the unit model in world units (Y dimension).
+
+	Returns:
+	- float: The scaled height of the unit's mesh.
+	"""
 	if mesh_instance and mesh_instance.mesh:
 		var aabb_size: Vector3 = mesh_instance.mesh.get_aabb().size
 		return aabb_size.y * scale_factor
 	return 0.0
 
-func _get_ground_height(pos_xz: Vector3) -> float:
-	if not is_inside_tree():
-		push_error("Unit: Cannot raycast if not inside tree.")
-		return pos_xz.y
-
-	var space_state = get_world_3d().direct_space_state
-	# Cast from high above the map down to below the map
-	var start_point = Vector3(pos_xz.x, 100.0, pos_xz.z)
-	var end_point = Vector3(pos_xz.x, -100.0, pos_xz.z)
-
-	var query = PhysicsRayQueryParameters3D.create(start_point, end_point)
-	
-	# Units and their collision shapes should be excluded from the raycast if they exist,
-	# but since they are KinematicBody3D (or Node3D) and not part of the ground,
-	# a simple query should suffice for now assuming only the Map/Tile geometry is in the way.
-	# If map tiles are in a specific collision layer, we could restrict the search.
-	# For simplicity, we assume the ground is the first thing hit.
-	var result = space_state.intersect_ray(query)
-
-	if result.is_empty():
-		# Fallback: if no ground found, assume the current Y level.
-		return position.y
-	
-	return result.position.y
 
 func _correct_height():
-	var ground_y = _get_ground_height(position)
+	"""
+	Adjusts the unit's Y position to correctly sit on the ground, centered vertically.
+	"""
+	var map_node = get_parent()
+	var ground_y = map_node.get_height_at_world_pos(position)
 	var unit_half_height = get_unit_height() / 2.0
 	position.y = ground_y + unit_half_height
 
@@ -202,17 +248,28 @@ func _correct_height():
 # Called every physics frame (60 times per second by default)
 # Called every frame for time-dependent combat logic
 func _process(delta: float):
-	if in_combat and unit_types.has("military"):
-		_try_attack()
+	"""
+	Called every frame. Handles combat logic for military units, allowing them to attack targets.
+
+	Arguments:
+	- delta (float): The elapsed time since the previous frame.
+	"""
 
 # Finds the closest enemy unit in any neighboring tile (Euclidean distance squared)
 # Returns the closest enemy unit instance, or null.
 func _get_closest_enemy_in_range() -> Unit:
+	"""
+	Finds the closest enemy unit within a bounding box defined by the unit's attack range.
+	Checks all tiles within the bounding box and calculates the exact world distance to enemy units.
+
+	Returns:
+	- Unit: The closest enemy unit instance within range, or null if none found.
+	"""
 	if not current_tile or not grid:
 		return null
 
 	var attack_range_hex: float = config.get("attack_range", 0.0)
-	var max_hex_distance: int = ceil(attack_range_hex) + 1
+	var max_hex_distance: int = ceil(attack_range_hex)
 	
 	if max_hex_distance <= 0:
 		return null
@@ -225,57 +282,43 @@ func _get_closest_enemy_in_range() -> Unit:
 	# Initialize minimum distance squared to the attack range squared + 1 (slightly outside initial range)
 	var min_distance_sq: float = attack_range_world_sq + 1.0
 
-	var current_coords: Vector2i = Vector2i(current_tile.x, current_tile.z)
-	var visited_coords: Dictionary = {current_coords: 0} # {Vector2i: hex_distance}
-	var tiles_to_check: Array[Vector2i] = [current_coords]
-	
+	var current_x: int = current_tile.x
+	var current_z: int = current_tile.z
 	var self_pos: Vector3 = position
-	
-	var head = 0
-	while head < tiles_to_check.size():
-		var tile_coords = tiles_to_check[head]
-		var hex_distance = visited_coords[tile_coords]
-		head += 1
 
-		# Stop searching if we exceed the calculated max hex distance + 1 (already processed the max distance tiles)
-		# Note: max_hex_distance includes the tiles at that distance.
-		if hex_distance > max_hex_distance:
-			continue
-
-		var tile_ref: Tile = grid.get_tile_by_coords(tile_coords)
-		if not is_instance_valid(tile_ref):
-			continue
-		
-		# Check if tile has enemy units
-		if tile_ref.has_enemy_units(player_id):
-			# Iterate over occupied slots on the enemy tile
-			for unit_ref in tile_ref.occupied_slots:
-				if is_instance_valid(unit_ref) and unit_ref.player_id != player_id:
-					# Calculate exact distance squared to enemy unit position
-					var distance_sq = self_pos.distance_squared_to(unit_ref.position)
-					
-					# Track closest enemy (minimum distance) AND ensure it is within range
-					if distance_sq <= attack_range_world_sq and distance_sq < min_distance_sq:
-						min_distance_sq = distance_sq
-						closest_enemy = unit_ref
-						
-		
-		# Explore neighbors for the next iteration (BFS)
-		if hex_distance < max_hex_distance:
-			# Get offsets based on row parity (Odd-R offset)
-			var offsets: Array[Vector2i] = Grid.ODD_R_NEIGHBOR_OFFSETS_EVEN if tile_coords.y % 2 == 0 else Grid.ODD_R_NEIGHBOR_OFFSETS_ODD
+	# Loop through a bounding box of coordinates
+	for x in range(current_x - max_hex_distance, current_x + max_hex_distance + 1):
+		for z in range(current_z - max_hex_distance, current_z + max_hex_distance + 1):
+			var tile_coords = Vector2i(x, z)
 			
-			for offset in offsets:
-				var neighbor_coords = tile_coords + offset
+			if not grid.is_valid_coords(tile_coords):
+				continue
 				
-				# Only add unvisited tiles that are valid
-				if not visited_coords.has(neighbor_coords) and grid.is_valid_coords(neighbor_coords):
-					visited_coords[neighbor_coords] = hex_distance + 1
-					tiles_to_check.append(neighbor_coords)
+			var tile_ref: Tile = grid.get_tile_by_coords(tile_coords)
+			if not is_instance_valid(tile_ref):
+				continue
+			
+			# Check if tile has enemy units
+			if tile_ref.has_enemy_units(player_id):
+				# Iterate over occupied slots on the enemy tile
+				for unit_ref in tile_ref.occupied_slots:
+					if is_instance_valid(unit_ref) and unit_ref.player_id != player_id:
+						# Calculate exact distance squared to enemy unit position
+						var distance_sq = self_pos.distance_squared_to(unit_ref.position)
+						
+						# Track closest enemy (minimum distance) AND ensure it is within range
+						if distance_sq <= attack_range_world_sq and distance_sq < min_distance_sq:
+							min_distance_sq = distance_sq
+							closest_enemy = unit_ref
 
 	return closest_enemy
 
 func _try_attack():
+	"""
+	Checks if the unit is ready to attack. If an enemy is in range, it deals damage,
+	activates the muzzle flash, and rotates the unit to face the target.
+	If no enemy is found, combat state is exited.
+	"""
 	# Check if attack cooldown is ready
 	var current_time = Time.get_unix_time_from_system()
 	if (current_time - last_attack_time) < attack_rate:
@@ -299,8 +342,17 @@ func _try_attack():
 	else:
 		# If we are flagged as in_combat but no enemies are found, exit combat state.
 		in_combat = false
+		if attack_check_timer and attack_check_timer.is_stopped() == false:
+			attack_check_timer.stop()
 
 func _physics_process(delta):
+	"""
+	Called every physics frame. Handles smooth movement towards the target world position.
+	Updates the unit's position and rotation based on movement speed and direction.
+
+	Arguments:
+	- delta (float): The elapsed time since the previous physics frame.
+	"""
 	if not is_moving:
 		return
 
@@ -320,11 +372,9 @@ func _physics_process(delta):
 		position = target_destination
 		is_moving = false
 		
-		if not arriving_at_formation_pos:
-			# We arrived at a new tile center, update coords and decide next move
-			# hex_x and hex_z are deprecated, we rely on current_tile reference updated via try_claim_new_slot
-			# We update hex_x/hex_z for coordinate tracking in this instance if needed, but not required by unit class itself
-			_move_to_next_tile()
+		# Immediately check for the next move or combat upon arrival.
+		# _move_to_next_tile() will handle flow field existence and target checks.
+		_move_to_next_tile()
 		
 		return
 
@@ -337,6 +387,12 @@ func _physics_process(delta):
 
 # Rotates the unit instantly to face the given direction vector (horizontal only)
 func _rotate_to_face(direction: Vector3):
+	"""
+	Rotates the unit instantly around the Y-axis to face the given direction vector (horizontal component only).
+
+	Arguments:
+	- direction (Vector3): The direction vector towards which the unit should face.
+	"""
 	# Only consider X and Z components for rotation
 	var planar_direction = Vector2(direction.x, direction.z).normalized()
 	if planar_direction != Vector2.ZERO:
@@ -348,6 +404,9 @@ func _rotate_to_face(direction: Vector3):
 # --- Timer Callback ---
 
 func _on_movement_check_timeout():
+	"""
+	Callback for the periodic movement timer. Triggers movement calculation if the military unit is currently idle.
+	"""
 	# Only military units follow flow field and only when idle
 	if unit_types.has("military") and not is_moving:
 		_move_to_next_tile()
@@ -356,6 +415,16 @@ func _on_movement_check_timeout():
 # This function is called on arrival OR by the periodic movement timer when idle.
 # Attempts to claim a formation slot on a new tile. If successful, renounces the previous slot.
 func try_claim_new_slot(new_tile: Tile, old_tile: Tile) -> bool:
+	"""
+	Attempts to claim a formation slot on a new tile. If successful, it releases the slot on the old tile.
+
+	Arguments:
+	- new_tile (Tile): The Tile object where the unit attempts to move.
+	- old_tile (Tile): The Tile object the unit is currently occupying.
+
+	Returns:
+	- bool: True if a slot was successfully claimed on the new tile, false otherwise.
+	"""
 	var new_slot = new_tile.claim_formation_slot(self)
 	
 	if new_slot != -1:
@@ -371,12 +440,18 @@ func try_claim_new_slot(new_tile: Tile, old_tile: Tile) -> bool:
 	return false
 
 func _move_to_next_tile():
+	"""
+	Calculates the next tile based on the player's flow field (target destination).
+	Checks for enemies in range, attempts to claim a slot on the next tile, and if successful,
+	calculates the precise world target position and initiates movement.
+	"""
 	if not grid:
 		push_error("Unit %d: Grid is not initialized." % player_id)
 		return
 
-	# 1. Get Game node to access Player data
-	var game_node = get_parent().get_parent() # Unit -> Map -> Game
+	# 1. Get Game and Map nodes
+	var map_node = get_parent()
+	var game_node = map_node.get_parent() # Unit -> Map -> Game
 	if not is_instance_valid(game_node) or game_node.name != "Game":
 		push_error("Unit %d: Could not find Game node." % player_id)
 		return
@@ -400,7 +475,14 @@ func _move_to_next_tile():
 	if _get_closest_enemy_in_range():
 		# Cannot move if an enemy is in range
 		is_moving = false
-		in_combat = true
+		
+		# If we are transitioning into combat, start the timer and try to attack immediately
+		if not in_combat and unit_types.has("military"):
+			in_combat = true
+			if attack_check_timer:
+				attack_check_timer.start()
+			_try_attack() # Immediate attack attempt
+			
 		return
 		
 	# 4. Check for available formation slot and claim it
@@ -416,8 +498,8 @@ func _move_to_next_tile():
 		next_tile.FORMATION_POSITIONS[formation_slot].y
 	)
 	
-	# 2. Raycast downward from the target X/Z position to find the actual ground height (Y)
-	var ground_y: float = _get_ground_height(target_xz_pos)
+	# 2. Query Map for the actual ground height (Y)
+	var ground_y: float = map_node.get_height_at_world_pos(target_xz_pos)
 	
 	# 3. Set the formation position: X/Z from calculation, Y from ground height + half unit height.
 	formation_position = Vector3(
@@ -434,5 +516,19 @@ func _move_to_next_tile():
 
 # --- Muzzle Flash Timer Callback ---
 
+func _on_attack_check_timeout():
+	"""
+	Timer callback to periodically check if the unit can perform an attack while in combat.
+	If combat is active, calls _try_attack(). If combat is inactive, stops the timer.
+	"""
+	if in_combat:
+		_try_attack()
+	elif attack_check_timer and attack_check_timer.is_stopped() == false:
+		attack_check_timer.stop()
+
+
 func _on_muzzle_flash_timeout():
+	"""
+	Callback for the MuzzleFlashTimer. Hides the muzzle flash light by setting its energy to 0.0.
+	"""
 	muzzle_flash.light_energy = 0.0

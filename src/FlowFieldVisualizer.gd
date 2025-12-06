@@ -21,6 +21,10 @@ const P1_COLOR_MIN = Color(0.0, 0.0, 1.0) # Blue
 var current_arrows: Array[MeshInstance3D] = []
 
 func _ready():
+	"""
+	Called when the node enters the scene tree for the first time.
+	Initializes the arrow mesh shape (a ConeMesh).
+	"""
 	# Create a basic ConeMesh (the arrow shape) dynamically
 	# ConeMesh must be created here or elsewhere with engine context available.
 	var cone_mesh = CylinderMesh.new()
@@ -30,10 +34,17 @@ func _ready():
 	arrow_mesh = cone_mesh
 	
 func _exit_tree():
+	"""
+	Called when the node is removed from the scene tree.
+	Cleans up all generated arrows.
+	"""
 	clear_visualization()
 
 # Removes all currently spawned flow field arrows.
 func clear_visualization() -> void:
+	"""
+	Removes and frees all currently displayed flow field arrow MeshInstance3D nodes from the scene.
+	"""
 	for arrow in current_arrows:
 		arrow.queue_free()
 	current_arrows.clear()
@@ -41,6 +52,17 @@ func clear_visualization() -> void:
 # Finds the maximum cost among all tiles to normalize the gradient.
 # Assumes tiles are available via p_grid.
 func _get_max_flow_cost(p_flow_field: FlowField, p_grid: Grid) -> float:
+	"""
+	Finds the maximum flow cost among all reachable tiles in the flow field.
+	This maximum cost is used to normalize the cost values for color gradient mapping.
+
+	Arguments:
+	- p_flow_field (FlowField): The flow field instance to inspect.
+	- p_grid (Grid): The map grid containing all tiles.
+
+	Returns:
+	- float: The maximum flow cost found, or 0.0 if no tiles are reachable.
+	"""
 	if not p_flow_field:
 		return 0.0
 		
@@ -54,6 +76,18 @@ func _get_max_flow_cost(p_flow_field: FlowField, p_grid: Grid) -> float:
 
 # Calculates color based on flow_cost relative to max_cost (0 = Green, Max = Red)
 func _get_color_from_cost(cost: float, max_cost: float, p_player_id: int) -> Color:
+	"""
+	Calculates a color based on the tile's flow cost, normalized against the maximum cost,
+	and using a player-specific color gradient (min cost = target/min color, max cost = max color).
+
+	Arguments:
+	- cost (float): The flow cost of the tile.
+	- max_cost (float): The maximum flow cost observed in the field for normalization.
+	- p_player_id (int): The ID of the player, used to select the color gradient.
+
+	Returns:
+	- Color: The calculated color for visualization.
+	"""
 	var COLOR_MIN: Color
 	var COLOR_MID: Color
 	var COLOR_MAX: Color
@@ -86,6 +120,16 @@ func _get_color_from_cost(cost: float, max_cost: float, p_player_id: int) -> Col
 		return COLOR_MID.lerp(COLOR_MAX, local_ratio)
 
 func update_visualization(p_flow_field: FlowField, p_grid: Grid, p_player_id: int) -> void:
+	"""
+	Generates and displays the flow field visualization arrows for the provided player's flow field.
+	Clears previous visualization, calculates maximum cost, and spawns rotated and colored arrows on reachable tiles
+	that have a defined movement direction.
+
+	Arguments:
+	- p_flow_field (FlowField): The flow field data to visualize.
+	- p_grid (Grid): The map grid instance.
+	- p_player_id (int): The ID of the player whose flow field is being visualized.
+	"""
 	clear_visualization()
 	
 	if not p_flow_field or not p_grid:

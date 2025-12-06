@@ -19,6 +19,11 @@ var last_mouse_position: Vector2 = Vector2.ZERO
 var map_bounds: Dictionary = {}
 
 func _ready():
+	"""
+	Called when the node enters the scene tree for the first time.
+	Attempts to find and register the Grid node and retrieves the map boundaries for camera clamping.
+	Sets this camera as the current viewport camera.
+	"""
 	if not is_instance_valid(grid_registry):
 		# Attempt to find Grid dynamically, assuming Map is a sibling named "Map"
 		var map_node = get_parent().find_child("Map", true, false)
@@ -37,10 +42,22 @@ func _ready():
 	make_current()
 
 func _process(delta):
+	"""
+	Called every frame. Handles continuous camera movement via keyboard input or edge scrolling.
+
+	Arguments:
+	- delta (float): The elapsed time since the previous frame.
+	"""
 	# Movement (WASD/Arrows + Edge Scrolling)
 	_handle_movement(delta)
 
 func _input(event):
+	"""
+	Handles various non-continuous input events like mouse clicks, mouse wheel, and middle-mouse button state changes.
+
+	Arguments:
+	- event (InputEvent): The incoming input event.
+	"""
 	# Middle Mouse Drag Handling
 	_handle_middle_mouse_drag(event)
 
@@ -51,6 +68,13 @@ func _input(event):
 	_handle_raycast_click(event)
 
 func _handle_movement(delta: float):
+	"""
+	Calculates and applies camera panning movement based on key presses (WASD/Arrows) and mouse position (edge scrolling).
+	The speed is dynamically adjusted based on the camera's height (position.y) to ensure constant screen-space movement.
+
+	Arguments:
+	- delta (float): The elapsed time since the previous frame.
+	"""
 	# Handle key and edge movement
 	var direction = Vector3.ZERO
 	var viewport = get_viewport()
@@ -99,6 +123,13 @@ func _handle_movement(delta: float):
 		_clamp_position()
 
 func _handle_middle_mouse_drag(event):
+	"""
+	Handles camera panning when the middle mouse button is held down and the mouse is moved.
+	Movement speed is adjusted based on camera height.
+
+	Arguments:
+	- event (InputEvent): The incoming input event.
+	"""
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_MIDDLE:
 			is_middle_mouse_down = event.pressed
@@ -129,6 +160,13 @@ func _handle_middle_mouse_drag(event):
 		_clamp_position()
 
 func _handle_zoom(event):
+	"""
+	Handles camera zooming (moving along the view vector) using the mouse wheel.
+	The camera's Y position is clamped within defined ZOOM_MIN and ZOOM_MAX limits.
+
+	Arguments:
+	- event (InputEvent): The incoming input event.
+	"""
 	if event is InputEventMouseButton:
 		var zoom_delta = 0.0
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
@@ -150,6 +188,10 @@ func _handle_zoom(event):
 				position.y = ZOOM_MAX
 				
 func _clamp_position():
+	"""
+	Clamps the camera's X and Z world position to prevent it from moving outside the map boundaries.
+	Uses map boundaries retrieved from the Grid registry.
+	"""
 	if map_bounds.is_empty():
 		return
 		
@@ -160,6 +202,13 @@ func _clamp_position():
 	position.z = clamp(position.z, map_bounds.z_min, map_bounds.z_max)
 
 func _handle_raycast_click(event):
+	"""
+	Handles a left mouse button press by performing a raycast from the camera through the mouse position.
+	If the raycast hits a tile body, it finds the associated Tile data object and emits the `hex_clicked` signal.
+
+	Arguments:
+	- event (InputEvent): The incoming input event.
+	"""
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		
 		if not is_instance_valid(grid_registry):

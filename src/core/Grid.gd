@@ -12,6 +12,10 @@ var MAP_Z_MIN: float = 0.0
 var MAP_Z_MAX: float = 0.0
 
 func _init():
+	"""
+	Constructor. Calculates and sets the world bounds (min/max X/Z coordinates) for the map
+	based on the configured map width and height.
+	"""
 	# Load game data to get map dimensions
 	# Assumes data/game_data.gd is available
 	var game_data = load("res://data/game_data.gd")
@@ -63,6 +67,13 @@ var node_to_coords: Dictionary = {}
 
 ## Registers a newly created tile with its grid coordinates, world position, and node reference.
 func register_tiles(new_tiles: Dictionary):
+	"""
+	Registers all generated Tile objects with the grid, populates the coordinate-to-tile map,
+	and initiates the neighbor connection process.
+
+	Arguments:
+	- new_tiles (Dictionary): A dictionary of Tile objects keyed by their Vector2i coordinates.
+	"""
 	# Clear existing tiles and reverse lookup
 	tiles.clear()
 	node_to_coords.clear()
@@ -78,12 +89,27 @@ func register_tiles(new_tiles: Dictionary):
 
 ## Performs a reverse lookup to find the grid coordinates associated with a specific tile node.
 func find_tile_by_node(node: Node3D) -> Vector2i:
+	"""
+	Performs a reverse lookup to find the grid coordinates associated with a specific tile Node3D instance.
+
+	Arguments:
+	- node (Node3D): The Node3D instance of the tile.
+
+	Returns:
+	- Vector2i: The grid coordinates (x, z) of the tile, or Vector2i(-1, -1) if not found.
+	"""
 	if node_to_coords.has(node):
 		return node_to_coords[node]
 	# Return an invalid coordinate to indicate tile not found, assuming x, z >= 0.
 	return Vector2i(-1, -1)
 
 func get_map_bounds() -> Dictionary:
+	"""
+	Returns the pre-calculated world boundaries of the map (used primarily for camera constraints).
+
+	Returns:
+	- Dictionary: Contains "x_min", "x_max", "z_min", and "z_max" world coordinates.
+	"""
 	return {
 		"x_min": MAP_X_MIN,
 		"x_max": MAP_X_MAX,
@@ -92,6 +118,16 @@ func get_map_bounds() -> Dictionary:
 	}
 
 func hex_to_world(x: int, z: int) -> Vector3:
+	"""
+	Retrieves the world position (center) of the tile at the given hex coordinates.
+
+	Arguments:
+	- x (int): The X grid coordinate.
+	- z (int): The Z grid coordinate (Y in Godot's Vector2i).
+
+	Returns:
+	- Vector3: The world position of the tile center, or Vector3.ZERO on error.
+	"""
 	var coords = Vector2i(x, z)
 	if not tiles.has(coords):
 		push_error("Grid.hex_to_world: No tile at coordinates (%d, %d)" % [x, z])
@@ -99,14 +135,37 @@ func hex_to_world(x: int, z: int) -> Vector3:
 	return tiles[coords].world_pos
 
 func is_valid_coords(coords: Vector2i) -> bool:
+	"""
+	Checks if a given coordinate pair exists within the map grid.
+
+	Arguments:
+	- coords (Vector2i): The grid coordinates (x, z).
+
+	Returns:
+	- bool: True if the coordinates are valid, false otherwise.
+	"""
 	return tiles.has(coords)
 
 func get_tile_by_coords(coords: Vector2i):
+	"""
+	Retrieves the Tile object instance at the specified grid coordinates.
+
+	Arguments:
+	- coords (Vector2i): The grid coordinates (x, z).
+
+	Returns:
+	- Tile: The Tile instance, or null if no tile exists at those coordinates.
+	"""
 	if tiles.has(coords):
 		return tiles[coords]
 	return null
 
 func connect_neighbors():
+	"""
+	Iterates over all tiles and determines their valid neighbors based on the Odd-R offset system.
+	Populates the `neighbors` array in each Tile object.
+	Also ensures the tile's x and z coordinates are stored directly on the Tile object.
+	"""
 	# Iterate over every tile in the grid
 	for coords in tiles:
 		var tile: Tile = tiles[coords]
