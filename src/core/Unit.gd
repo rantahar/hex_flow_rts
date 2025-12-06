@@ -2,6 +2,7 @@ extends Node3D
 class_name Unit
 const HealthBar3D = preload("res://src/HealthBar3D.gd")
 const Grid = preload("res://src/core/Grid.gd")
+const Structure = preload("res://src/core/Structure.gd")
 
 var health_bar: HealthBar3D
 var muzzle_flash: OmniLight3D
@@ -257,13 +258,15 @@ func _process(delta: float):
 
 # Finds the closest enemy unit in any neighboring tile (Euclidean distance squared)
 # Returns the closest enemy unit instance, or null.
-func _get_closest_enemy_in_range() -> Unit:
+# Finds the closest enemy unit or structure in range (Euclidean distance squared)
+# Returns the closest enemy instance (Unit or Structure), or null.
+func _get_closest_enemy_in_range() -> Node3D:
 	"""
-	Finds the closest enemy unit within a bounding box defined by the unit's attack range.
-	Checks all tiles within the bounding box and calculates the exact world distance to enemy units.
+	Finds the closest enemy unit or structure within a bounding box defined by the unit's attack range.
+	Checks all tiles within the bounding box and calculates the exact world distance to enemy targets.
 
 	Returns:
-	- Unit: The closest enemy unit instance within range, or null if none found.
+	- Node3D: The closest enemy instance (Unit or Structure) within range, or null if none found.
 	"""
 	if not current_tile or not grid:
 		return null
@@ -278,7 +281,7 @@ func _get_closest_enemy_in_range() -> Unit:
 	var attack_range_world: float = attack_range_hex * Grid.HEX_SCALE
 	var attack_range_world_sq: float = attack_range_world * attack_range_world
 
-	var closest_enemy: Unit = null
+	var closest_enemy: Node3D = null
 	# Initialize minimum distance squared to the attack range squared + 1 (slightly outside initial range)
 	var min_distance_sq: float = attack_range_world_sq + 1.0
 
@@ -298,18 +301,27 @@ func _get_closest_enemy_in_range() -> Unit:
 			if not is_instance_valid(tile_ref):
 				continue
 			
-			# Check if tile has enemy units
-			if tile_ref.has_enemy_units(player_id):
-				# Iterate over occupied slots on the enemy tile
-				for unit_ref in tile_ref.occupied_slots:
-					if is_instance_valid(unit_ref) and unit_ref.player_id != player_id:
-						# Calculate exact distance squared to enemy unit position
-						var distance_sq = self_pos.distance_squared_to(unit_ref.position)
-						
-						# Track closest enemy (minimum distance) AND ensure it is within range
-						if distance_sq <= attack_range_world_sq and distance_sq < min_distance_sq:
-							min_distance_sq = distance_sq
-							closest_enemy = unit_ref
+			var targets_on_tile: Array[Node3D] = []
+			
+			# 1. Check for enemy units
+			for unit_ref in tile_ref.occupied_slots:
+				if is_instance_valid(unit_ref) and unit_ref.player_id != player_id:
+					targets_on_tile.append(unit_ref)
+					
+			# 2. Check for enemy structures
+			if tile_ref.structure != null and is_instance_valid(tile_ref.structure) and tile_ref.structure.player_id != player_id:
+				targets_on_tile.append(tile_ref.structure)
+			
+			
+			# Check distances for all found targets on this tile
+			for target_ref in targets_on_tile:
+				# Calculate exact distance squared to enemy position
+				var distance_sq = self_pos.distance_squared_to(target_ref.position)
+				
+				# Track closest enemy (minimum distance) AND ensure it is within range
+				if distance_sq <= attack_range_world_sq and distance_sq < min_distance_sq:
+					min_distance_sq = distance_sq
+					closest_enemy = target_ref
 
 	return closest_enemy
 

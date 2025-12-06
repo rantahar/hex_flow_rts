@@ -167,7 +167,7 @@ func calculate_flow(grid: Grid) -> void:
 func _init(p_id: int, config: Dictionary):
 	# Initialize properties that cannot use default values or require calculation
 	id = p_id
-	resources = config.get("starting_resources", 1000.0) # Using 1000.0 default as requested
+	resources = config.get("starting_resources", 100.0)
 	structures = [] # Initialized to empty array
 
 func add_resources(amount: float):

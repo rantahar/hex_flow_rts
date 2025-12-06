@@ -69,7 +69,7 @@ const STRUCTURE_TYPES = {
 	"base": {
 		"display_name": "Main Base",
 		"mesh_path": "res://assets/robot_simple.obj",
-		"max_health": 1000.0,
+		"max_health": 100.0,
 		"size": 0.4,
 		"resource_generation_rate": 1.0,
 		"cost": 0,
@@ -80,9 +80,9 @@ const STRUCTURE_TYPES = {
 	"drone_factory": {
 		"display_name": "Drone Factory",
 		"mesh_path": "res://assets/robot_simple.obj",
-		"max_health": 500.0,
-		"size": 0.35,
-		"cost": 200,
+		"max_health": 100.0,
+		"size": 0.2,
+		"cost": 100,
 		"buildable": true,
 		"structure_type": "unit_producer",
 		"produces_unit_type": "infantry",
@@ -134,10 +134,12 @@ const PLAYER_CONFIGS = [
 		"id": 0,
 		"display_name": "Red Team",
 		"color": Color.RED,
+		"starting_resources": 100.0
 	},
 	{
 		"id": 1,
 		"display_name": "Blue Team",
 		"color": Color.BLUE,
+		"starting_resources": 100.0
 	}
 ]
