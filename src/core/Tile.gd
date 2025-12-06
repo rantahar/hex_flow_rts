@@ -177,3 +177,10 @@ func get_flow_cost(player_id: int) -> float:
 	total_cost += density_cost
 	
 	return total_cost
+
+func is_buildable_terrain() -> bool:
+	"""
+	Checks if the tile's underlying terrain type allows placing a structure.
+	For simplicity, currently requires the tile to be walkable.
+	"""
+	return walkable

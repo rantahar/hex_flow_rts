@@ -2,8 +2,17 @@ extends Node3D
 class_name Game
 const GameData = preload("res://data/game_data.gd")
 const GameConfig = preload("res://data/game_config.gd")
+const ResourceDisplay = preload("res://src/ResourceDisplay.gd")
+const BuildMenu = preload("res://src/BuildMenu.gd")
+# Placeholder constant until StructurePlacer.gd is created
+const StructurePlacer = preload("res://src/StructurePlacer.gd")
 
 @onready var map_node = $Map
+@onready var canvas_layer = $CanvasLayer
+@onready var structure_placer: StructurePlacer = $StructurePlacer
+
+var placing_player_id: int = -1 # which player (0 or 1) is currently placing
+
 var players: Array[Player] = []
 var player_visualizers: Array[FlowFieldVisualizer] = []
 var current_visualization_player: int = 0
@@ -125,6 +134,9 @@ func _ready() -> void:
 	# Set player targets (currently hardcoded as they were not moved to GameData)
 	var player0 = get_player(0)
 	var player1 = get_player(1)
+	
+	# Assume player 0 is the human player
+	var human_player = player0
 
 	var grid = map_node.get_node("Grid")
 	
@@ -167,13 +179,145 @@ func _ready() -> void:
 				push_error("Failed to place drone_factory for Player %d next to base at %s." % [player.id, factory_tile.get_coords()])
 		else:
 			push_error("Could not find a free tile next to the base for Player %d to place drone_factory." % player.id)
-
-	# NOTE: Manual unit spawns removed as per task requirement.
 			
+	# UI Setup for the human player (player 0)
+	if is_instance_valid(human_player) and is_instance_valid(canvas_layer):
+		# Paths assume CanvasLayer is a direct child of Game, and MarginContainer is a direct child of CanvasLayer.
+		# Assumes the first MarginContainer holds ResourceDisplay and the second holds BuildMenu.
+		var resource_display = canvas_layer.get_node("MarginContainer/ResourceDisplay")
+		var build_menu = canvas_layer.get_node("MarginContainer2/BuildMenu")
+		
+		if not is_instance_valid(build_menu):
+			push_error("Game: Could not find BuildMenu node at path MarginContainer2/BuildMenu. Check game.tscn.")
+		
+		if is_instance_valid(resource_display) and resource_display is ResourceDisplay:
+			resource_display.setup(human_player)
+		if is_instance_valid(build_menu) and build_menu is BuildMenu:
+			build_menu.setup(human_player)
+			
+			# --- Building UI Signal Handling ---
+			# Connect the BuildMenu's selected signal to the placement handler
+			if build_menu.has_signal("structure_selected"):
+				build_menu.structure_selected.connect(_on_structure_selected)
+				
+	# Connect hex click signal from camera for placement confirmation
+	if $Camera3D.has_signal("hex_clicked"):
+		$Camera3D.hex_clicked.connect(_on_hex_clicked)
+
 	# Wait for specified delay before starting visualization setup
 	await get_tree().create_timer(GameData.START_DELAY_SECONDS).timeout
 	
 	_post_ready_setup()
+
+# --- Placement Mode Handling ---
+
+func _on_structure_selected(structure_type: String):
+	"""
+	Initiates structure placement mode for the human player (Player 0).
+	"""
+	var player_id = 0 # Human player
+	var player = get_player(player_id)
+	
+	if not is_instance_valid(player):
+		push_error("Game._on_structure_selected: Player %d not found." % player_id)
+		return
+		
+	placing_player_id = player_id
+	
+	if is_instance_valid(structure_placer):
+		structure_placer.enter_placement_mode(structure_type, placing_player_id)
+		print("Game: Entered placement mode for %s (Player %d)." % [structure_type, placing_player_id])
+	else:
+		push_error("Game._on_structure_selected: StructurePlacer node is not set up.")
+
+func _on_hex_clicked(tile: Tile):
+	"""
+	Handles a click on a hexagonal tile, primarily for structure placement confirmation.
+	"""
+	if is_instance_valid(structure_placer) and structure_placer.is_active():
+		if placing_player_id == -1:
+			push_error("Game._on_hex_clicked: Placing player ID is invalid.")
+			structure_placer.exit_placement_mode()
+			return
+			
+		var player = get_player(placing_player_id)
+		
+		# structure_placer.attempt_placement handles resource checks and calling player.place_structure
+		var success = structure_placer.attempt_placement(tile, player, map_node)
+		
+		if success:
+			print("Game: Structure placed successfully by Player %d at %s." % [placing_player_id, tile.get_coords()])
+		
+		# Always consume the click event if placement mode is active
+		return
+	# If placement mode is inactive, the RTSCamera handles the click as normal unit movement/selection.
+	pass
+
+
+# Adds the raycast logic for mouse hover detection (Task 2 refactoring)
+func _get_hovered_tile() -> Tile:
+	var viewport = get_viewport()
+	var camera = $Camera3D
+	var grid = map_node.get_node_or_null("Grid")
+	
+	if not is_instance_valid(camera) or not is_instance_valid(grid):
+		return null
+	
+	var space_state = get_world_3d().direct_space_state
+	var mouse_pos = viewport.get_mouse_position()
+	var ray_origin = camera.project_ray_origin(mouse_pos)
+	var ray_end = camera.project_ray_normal(mouse_pos) * 1000.0 + ray_origin
+	
+	var query = PhysicsRayQueryParameters3D.create(ray_origin, ray_end)
+	var intersection = space_state.intersect_ray(query)
+	
+	if intersection:
+		var collider = intersection.collider
+		var tile_coords: Vector2i = Vector2i(-1, -1)
+		
+		# Traverse up the tree until a registered StaticBody3D tile node is found.
+		# This replicates the robust clicking logic from RTSCamera.gd.
+		var current_node: Node = collider
+		var tile_node: StaticBody3D = null
+		
+		while current_node:
+			# NOTE: Assuming tiles are StaticBody3D and registered in Grid
+			if current_node is StaticBody3D:
+				tile_coords = grid.find_tile_by_node(current_node)
+				if tile_coords != Vector2i(-1, -1):
+					tile_node = current_node
+					break
+			
+			# Optimization: Stop searching if we hit the top-level map node
+			if current_node == map_node:
+				break
+				
+			current_node = current_node.get_parent()
+		
+		if tile_coords != Vector2i(-1, -1):
+			# Look up Tile object
+			return grid.tiles.get(tile_coords)
+	
+	return null
+
+# Handles placement preview updates and cancellation
+func _process(delta: float) -> void:
+	if is_instance_valid(structure_placer) and structure_placer.is_active():
+		
+		# Handle cancellation:
+		if Input.is_action_just_pressed("ui_cancel"):
+			structure_placer.exit_placement_mode()
+			print("Game: Placement mode cancelled.")
+			placing_player_id = -1
+			return
+
+		# Handle placement preview updates:
+		var hovered_tile = _get_hovered_tile()
+		var player = get_player(0) # Human player is always Player 0
+		
+		if is_instance_valid(hovered_tile) and is_instance_valid(player):
+			structure_placer.update_preview(hovered_tile, player)
+
 
 # Initializes flow fields and visualization after a delay
 func _post_ready_setup() -> void:

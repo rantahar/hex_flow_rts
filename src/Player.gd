@@ -1,6 +1,8 @@
 class_name Player
 extends Node3D
 
+signal resources_updated(new_resources: float)
+
 # Exported player ID.
 @export var id: int
 const GameData = preload("res://data/game_data.gd")
@@ -175,6 +177,17 @@ func add_resources(amount: float):
 	Adds a specific amount to the player's resources.
 	"""
 	resources += amount
+	resources_updated.emit(resources)
+
+func can_afford(structure_key: String) -> bool:
+	"""
+	Checks if the player has enough resources to afford the given structure type.
+	"""
+	var structure_config = GameData.STRUCTURE_TYPES.get(structure_key)
+	if not structure_config:
+		return false
+	var cost = structure_config.get("cost", 0.0)
+	return resources >= cost
 
 # --- Structure and Unit Production Management ---
 
@@ -229,12 +242,17 @@ func place_structure(structure_key: String, target_tile: Tile, map_node: Node3D)
 		push_error("Player %d.place_structure: Structure '%s' is not buildable by normal means." % [id, structure_key])
 		return false
 		
-	# 2. Check if target_tile is free
+	# 2. Check if target_tile is suitable for building (terrain)
+	if not target_tile.is_buildable_terrain():
+		push_error("Player %d.place_structure: Target tile (%s) terrain does not allow building." % [id, target_tile.get_coords()])
+		return false
+
+	# 3. Check if target_tile is free (occupation)
 	if target_tile.structure != null:
 		push_error("Player %d.place_structure: Target tile (%s) already occupied by a structure." % [id, target_tile.get_coords()])
 		return false
 		
-	# 3. Check if player has enough resources
+	# 4. Check if player has enough resources
 	var structure_cost: float = structure_config.get("cost", 0.0)
 	if resources < structure_cost:
 		push_error("Player %d.place_structure: Not enough resources. Required: %f, Have: %f" % [id, structure_cost, resources])

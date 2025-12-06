@@ -1,12 +1,14 @@
-[gd_scene load_steps=12 format=3 uid="uid://cmri410y4al53"]
+[gd_scene load_steps=13 format=3 uid="uid://cmri410y4al53"]
 
 [ext_resource type="Script" path="res://src/RTSCamera.gd" id="1_i1nf2"]
 [ext_resource type="Script" path="res://src/core/MapGenerator.gd" id="1_r4x5c"]
 [ext_resource type="Script" path="res://src/core/map.gd" id="2_ie3hc"]
 [ext_resource type="Script" path="res://src/core/Grid.gd" id="3_yrrol"]
-[ext_resource type="Script" path="res://src/ClickMarker.gd" id="4_5dpvh"]
+[ext_resource type="Script" path="res://src/ResourceDisplay.gd" id="8_hbkdh"]
+[ext_resource type="Script" path="res://src/BuildMenu.gd" id="9_8ixy4"]
 [ext_resource type="Script" path="res://src/FlowFieldVisualizer.gd" id="9_83565"]
 [ext_resource type="Script" path="res://src/Game.gd" id="10_gds"]
+[ext_resource type="Script" path="res://src/StructurePlacer.gd" id="10_wlmfl"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_favtp"]
 turbidity = 2.0
@@ -22,10 +24,6 @@ background_energy_multiplier = 2.0
 sky = SubResource("Sky_jdfr1")
 ambient_light_source = 3
 ambient_light_color = Color(1, 1, 1, 1)
-
-[sub_resource type="SphereMesh" id="SphereMesh_3v2a4"]
-radius = 0.2
-height = 0.4
 
 [node name="Game" type="Node3D"]
 script = ExtResource("10_gds")
@@ -53,8 +51,32 @@ script = ExtResource("1_r4x5c")
 [node name="FlowVisualizer" type="Node3D" parent="Map"]
 script = ExtResource("9_83565")
 
-[node name="ClickMarker" type="MeshInstance3D" parent="."]
-mesh = SubResource("SphereMesh_3v2a4")
-script = ExtResource("4_5dpvh")
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
 
-[connection signal="hex_clicked" from="Camera3D" to="ClickMarker" method="_on_hex_clicked"]
+[node name="MarginContainer" type="MarginContainer" parent="CanvasLayer"]
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="ResourceDisplay" type="HBoxContainer" parent="CanvasLayer/MarginContainer"]
+layout_mode = 2
+script = ExtResource("8_hbkdh")
+
+[node name="ResourceLabel" type="Label" parent="CanvasLayer/MarginContainer/ResourceDisplay"]
+layout_mode = 2
+
+[node name="MarginContainer2" type="MarginContainer" parent="CanvasLayer"]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_top = -40.0
+offset_right = 40.0
+grow_vertical = 0
+mouse_filter = 0
+
+[node name="BuildMenu" type="VBoxContainer" parent="CanvasLayer/MarginContainer2"]
+layout_mode = 2
+mouse_filter = 0
+script = ExtResource("9_8ixy4")
+
+[node name="StructurePlacer" type="Node3D" parent="."]
+script = ExtResource("10_wlmfl")

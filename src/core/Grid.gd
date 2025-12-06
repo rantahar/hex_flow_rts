@@ -134,6 +134,29 @@ func hex_to_world(x: int, z: int) -> Vector3:
 		return Vector3.ZERO
 	return tiles[coords].world_pos
 
+func world_to_hex(world_pos: Vector3) -> Vector2i:
+	"""
+	Converts a world position (Vector3) to Odd-R hex grid coordinates (Vector2i).
+	
+	Arguments:
+	- world_pos (Vector3): The world position.
+	
+	Returns:
+	- Vector2i: The corresponding hex coordinates (x, z).
+	"""
+	var z_hex_float = round(world_pos.z / Z_SPACING)
+	var z_hex = int(z_hex_float)
+	
+	# Calculate raw x based on row parity correction
+	var x_raw = world_pos.x / X_SPACING
+	var x_offset = 0.0
+	if z_hex % 2 != 0:
+		x_offset = 0.5
+	
+	var x_hex = round(x_raw - x_offset)
+	
+	return Vector2i(x_hex, z_hex)
+
 func is_valid_coords(coords: Vector2i) -> bool:
 	"""
 	Checks if a given coordinate pair exists within the map grid.
