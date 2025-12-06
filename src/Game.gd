@@ -25,7 +25,7 @@ func initialize_players(player_configs: Array) -> void:
 	players.clear()
 	
 	for config in player_configs:
-		var player_node = Player.new()
+		var player_node = Player.new(config["id"], config)
 		
 		# Set Node properties and Data class properties
 		player_node.id = config["id"]
@@ -35,8 +35,7 @@ func initialize_players(player_configs: Array) -> void:
 		# player_node.target is set elsewhere, typically by user input.
 		player_node.flow_field = FlowField.new()
 		player_node.flow_field.player_id = player_node.id
-		player_node.units = []
-		player_node.resources = 0
+		# player_node.units and player_node.resources are initialized in Player.gd
 		
 		# Add Player node to the scene tree
 		add_child(player_node)
@@ -91,6 +90,29 @@ func _find_walkable_spawn_tile(grid: Grid, preferred_coords: Vector2i) -> Tile:
 	push_error("Could not find a walkable spawn tile near %s." % preferred_coords)
 	return null
 
+# Helper function to find the first walkable, un-occupied neighbor tile.
+func _find_free_neighbor_tile(grid: Grid, center_tile: Tile) -> Tile:
+	"""
+	Searches immediately adjacent neighbor tiles for one that is walkable and
+	not occupied by a structure.
+
+	Arguments:
+	- grid (Grid): The grid instance. (Currently unused but kept for consistency)
+	- center_tile (Tile): The tile whose neighbors are checked.
+
+	Returns:
+	- Tile: A free, walkable neighbor tile, or null.
+	"""
+	if not center_tile:
+		return null
+		
+	for neighbor_tile in center_tile.neighbors:
+		# Check if tile is walkable and free of structures
+		if neighbor_tile.walkable and neighbor_tile.structure == null:
+			return neighbor_tile
+			
+	return null
+
 func _ready() -> void:
 	"""
 	Called when the node enters the scene tree for the first time.
@@ -124,6 +146,27 @@ func _ready() -> void:
 		player1.spawn_tile = _find_walkable_spawn_tile(grid, P1_SPAWN_COORDS)
 		if player1.spawn_tile:
 			player1.calculate_flow(grid) # Trigger P1 flow calculation
+	
+	# Task 5: Spawn initial bases for each player
+	for player in players:
+		if not is_instance_valid(player) or not player.spawn_tile:
+			continue
+			
+		# 1. Place the Main Base (cost 0, not buildable by normal means)
+		var success = player.place_structure("base", player.spawn_tile, map_node)
+		if not success:
+			push_error("Failed to place base for Player %d at %s." % [player.id, player.spawn_tile.get_coords()])
+			continue
+
+		# 2. For testing, place a Drone Factory next to the base (cost 200, buildable)
+		var factory_tile = _find_free_neighbor_tile(grid, player.spawn_tile)
+		if is_instance_valid(factory_tile):
+			# Note: Drone factory costs 200 resources, but the player starts with 1000.
+			var factory_success = player.place_structure("drone_factory", factory_tile, map_node)
+			if not factory_success:
+				push_error("Failed to place drone_factory for Player %d next to base at %s." % [player.id, factory_tile.get_coords()])
+		else:
+			push_error("Could not find a free tile next to the base for Player %d to place drone_factory." % player.id)
 
 	# NOTE: Manual unit spawns removed as per task requirement.
 			

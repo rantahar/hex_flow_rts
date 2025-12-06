@@ -5,51 +5,17 @@ extends Node3D
 @export var id: int
 const GameData = preload("res://data/game_data.gd")
 const GameConfig = preload("res://data/game_config.gd")
+const Structure = preload("res://src/core/Structure.gd")
+const Tile = preload("res://src/core/Tile.gd")
 
 # Required for Game.gd initialization logic
 var color: Color = Color.WHITE
 var target: Vector2i = Vector2i.ZERO
 var flow_field = null # Assumes FlowField is globally available or handled by Game.gd
 var units: Array = []
-var resources: int = 0
+var structures: Array[Structure] = []
+var resources: float = 0.0
 var spawn_tile: Tile
-var spawn_timer: float = GameConfig.SPAWN_INTERVAL
-
-func _process(delta: float):
-	"""
-	Called every frame. Handles periodic unit spawning if a spawn tile is set.
-
-	Arguments:
-	- delta (float): The elapsed time since the previous frame.
-	"""
-	if not spawn_tile:
-		return
-		
-	spawn_timer += delta
-	
-	if spawn_timer >= GameConfig.SPAWN_INTERVAL:
-		spawn_timer -= GameConfig.SPAWN_INTERVAL
-		
-		# NOTE: We need a reference to the Grid/Map node to spawn.
-		# Assuming the parent of Player is Game, and Game has a reference to Map/Grid.
-		# Since Player is a Node3D in the scene, and units are children of the Map, 
-		# we will rely on Game.gd to pass the map reference. 
-		# For now, let's assume `get_parent().get_node("Map")` is available and safe,
-		# although a better practice might be passing a reference during initialization.
-		# Looking at spawn_unit's signature, it requires `map_node`.
-		# Since `spawn_unit` is currently being called without args in Game.gd,
-		# we need to ensure the map node is accessible, or update Game.gd later to expose it.
-		# Given the original `spawn_unit` signature takes `map_node`, 
-		# it seems safer to assume `map_node` should be retrieved or stored.
-		# Let's adjust spawn_unit to handle optional hex_x, hex_z, 
-		# and assume map_node is passed in from Game, or retrieve it here.
-		
-		# Let's assume we can get the Map from the Game node (our parent).
-		var game_node = get_parent()
-		if game_node and game_node.has_node("Map"):
-			var map_node = game_node.get_node("Map")
-			# Passing default -1 values to trigger spawn_tile usage in spawn_unit()
-			spawn_unit(-1, -1, map_node)
 
 
 # We assume Unit.gd is used directly as the unit's class/resource definition.
@@ -194,3 +160,116 @@ func calculate_flow(grid: Grid) -> void:
 	
 	# 3. Calculate flow field
 	flow_field.calculate(targets, grid)
+
+
+# --- Initialization and Resource Management ---
+
+func _init(p_id: int, config: Dictionary):
+	# Initialize properties that cannot use default values or require calculation
+	id = p_id
+	resources = config.get("starting_resources", 1000.0) # Using 1000.0 default as requested
+	structures = [] # Initialized to empty array
+
+func add_resources(amount: float):
+	"""
+	Adds a specific amount to the player's resources.
+	"""
+	resources += amount
+
+# --- Structure and Unit Production Management ---
+
+func _on_structure_unit_produced(unit_type: String, structure: Structure):
+	"""
+	Handles the unit production signal from a structure.
+	Spawns the unit on the structure's current tile.
+	"""
+	if not is_instance_valid(structure):
+		push_error("Player %d._on_structure_unit_produced: Invalid structure instance received." % id)
+		return
+		
+	# Retrieve map_node via get_parent().get_node("Map") as instructed.
+	var game_node = get_parent()
+	if not is_instance_valid(game_node) or not game_node.has_node("Map"):
+		push_error("Player %d._on_structure_unit_produced: Could not find Map node." % id)
+		return
+		
+	var map_node = game_node.get_node("Map")
+		
+	# Spawn unit on the tile where the producing structure is located
+	var tile = structure.current_tile
+	if not is_instance_valid(tile):
+		push_error("Player %d._on_structure_unit_produced: Structure tile is invalid." % id)
+		return
+		
+	# Call the existing spawn_unit method, providing coordinates and map_node
+	spawn_unit(tile.x, tile.z, map_node, unit_type)
+	# Note: spawn_unit handles adding the unit to the player's `units` array internally.
+
+func place_structure(structure_key: String, target_tile: Tile, map_node: Node3D) -> bool:
+	"""
+	Attempts to build a structure at the target tile, checking resource cost and tile availability.
+	The structure is instantiated and added as a child of map_node.
+	
+	Arguments:
+	- structure_key (String): The key in GameData.STRUCTURE_TYPES.
+	- target_tile (Tile): The Tile instance where the structure should be built.
+	- map_node (Node3D): The Map node instance, used as the parent for the new structure.
+	
+	Returns:
+	- bool: True if the structure was successfully built, false otherwise.
+	"""
+	if not GameData.STRUCTURE_TYPES.has(structure_key):
+		push_error("Player %d.place_structure: Invalid structure key '%s'." % [id, structure_key])
+		return false
+	
+	var structure_config = GameData.STRUCTURE_TYPES[structure_key]
+	
+	# 1. Check if structure is buildable (we allow non-buildable structures like 'base' to be placed if cost is 0)
+	if structure_config.get("cost", 0.0) > 0 and not structure_config.get("buildable", true):
+		push_error("Player %d.place_structure: Structure '%s' is not buildable by normal means." % [id, structure_key])
+		return false
+		
+	# 2. Check if target_tile is free
+	if target_tile.structure != null:
+		push_error("Player %d.place_structure: Target tile (%s) already occupied by a structure." % [id, target_tile.get_coords()])
+		return false
+		
+	# 3. Check if player has enough resources
+	var structure_cost: float = structure_config.get("cost", 0.0)
+	if resources < structure_cost:
+		push_error("Player %d.place_structure: Not enough resources. Required: %f, Have: %f" % [id, structure_cost, resources])
+		return false
+		
+	# --- Checks Pass: Build Structure ---
+	
+	# Deduct resources
+	add_resources(-structure_cost)
+	
+	# Create structure instance
+	var structure_instance = Structure.new(structure_config, id, target_tile, target_tile.world_pos)
+	
+	if not is_instance_valid(map_node):
+		push_error("Player %d.place_structure: Invalid Map node reference." % id)
+		return false
+
+	# Add structure as child of Map node (required for _ready and raycasting)
+	map_node.add_child(structure_instance)
+	
+	# Set target_tile.structure
+	target_tile.structure = structure_instance
+	
+	# Add structure to player's array
+	structures.append(structure_instance)
+	
+	# Handle unit producers and resource generators that need to start working
+	if structure_instance.structure_type == "unit_producer":
+		# Connect unit_produced signal to _on_unit_produced
+		if structure_instance.has_signal("unit_produced"):
+			structure_instance.unit_produced.connect(_on_structure_unit_produced)
+			structure_instance.start_production()
+		else:
+			push_error("Structure type 'unit_producer' lacks required 'unit_produced' signal!")
+	# Resource generators start automatically in Structure._ready (via _init setup)
+	
+	print("Player %d successfully placed structure '%s' at %s. Remaining resources: %f" % [id, structure_key, target_tile.get_coords(), resources])
+	return true

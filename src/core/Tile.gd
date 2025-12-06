@@ -1,5 +1,11 @@
 class_name Tile
 
+# Preloads needed for type hinting and access to constants
+const Grid = preload("res://src/core/Grid.gd")
+const Structure = preload("res://src/core/Structure.gd")
+const Unit = preload("res://src/core/Unit.gd")
+const GameConfig = preload("res://data/game_config.gd")
+
 const FORMATION_RADIUS: float = Grid.HEX_SCALE * 0.3
 
 # 6 positions in a radial hex pattern around tile center (radius ~0.3 * HEX_SCALE)
@@ -32,6 +38,9 @@ var node: Node3D
 var walkable: bool = true
 var cost: float = 1.0
 
+# Reference to the Structure built on this tile (null if free)
+var structure: Structure = null
+
 # A list of neighboring Tile objects, assigned after map generation
 var neighbors: Array[Tile] = []
 
@@ -54,8 +63,12 @@ func claim_formation_slot(unit: Unit) -> int:
 	- unit (Unit): The unit instance attempting to claim a slot.
 
 	Returns:
-	- int: The index of the claimed slot (0-5), or -1 if all slots are occupied.
+	- int: The index of the claimed slot (0-5), or -1 if all slots are occupied or a structure is present.
 	"""
+	# Structures block all formation slots
+	if structure != null:
+		return -1
+		
 	for i in range(occupied_slots.size()):
 		if occupied_slots[i] == null:
 			occupied_slots[i] = unit # Register the unit instance
@@ -104,3 +117,63 @@ func is_formation_full() -> bool:
 		if slot == null:
 			return false
 	return true
+
+# Checks if this tile should be considered a target for flow field calculation.
+# This only checks for enemy structures and units.
+func is_flow_target(player_id: int) -> bool:
+	"""
+	Returns true if the tile contains an enemy unit or an enemy structure,
+	making it a military target.
+	"""
+	# 1. Check for enemy units
+	if has_enemy_units(player_id):
+		return true
+		
+	# 2. Check for enemy structure
+	if structure != null and is_instance_valid(structure) and structure.player_id != player_id:
+		return true
+		
+	return false
+
+# Calculates the flow field cost for a unit of player_id attempting to move onto this tile.
+func get_flow_cost(player_id: int) -> float:
+	"""
+	Calculates the movement cost of this tile for a given player ID, factoring in
+	walkability, base terrain cost, friendly structure blocking, and friendly unit density.
+	
+	Returns:
+	- float: The movement cost, or INF if blocked. Returns 0.0 if it's an attack target.
+	"""
+	
+	# 1. Immediate Target Check (Cost 0.0)
+	# If this tile is a flow target (enemy unit/structure), movement cost is 0.0 to encourage flow towards it.
+	if is_flow_target(player_id):
+		return 0.0
+
+	# 2. Blocked Check (Cost INF)
+	if not walkable:
+		return INF
+	
+	# Friendly structures block all movement onto the tile
+	if structure != null and is_instance_valid(structure) and structure.player_id == player_id:
+		return INF
+			
+	# 3. Base Terrain Cost + Density Cost
+	
+	var total_cost: float = cost
+	var density_cost: float = 0.0
+	
+	# Calculate density cost based on friendly units on the tile.
+	# Note: Only units currently NOT being processed by this flow field should be counted,
+	# but for simplicity, we count all friendly units and rely on combat checks elsewhere.
+	var friendly_unit_count: int = 0
+	for unit in occupied_slots:
+		if unit != null and is_instance_valid(unit) and unit.player_id == player_id:
+			friendly_unit_count += 1
+	
+	if friendly_unit_count > 0:
+		density_cost = friendly_unit_count * GameConfig.DENSITY_COST_MULTIPLIER
+		
+	total_cost += density_cost
+	
+	return total_cost

@@ -24,10 +24,10 @@ func calculate(targets: Dictionary, grid: Grid) -> void:
 		push_error("FlowField.calculate: Grid is null")
 		return
 	
-	# Add enemy tiles to targets if not already present
-	# This ensures units engage nearby enemy units.
+	# Add enemy tiles (containing enemy units or structures) to targets if not already present
+	# This ensures units engage nearby enemy units/structures.
 	for tile in grid.tiles.values():
-		if tile.has_enemy_units(player_id):
+		if tile.is_flow_target(player_id):
 			if not targets.has(tile):
 				# Assign a base cost of 0.0 to make enemy tiles flow targets
 				targets[tile] = 0.0
@@ -60,7 +60,9 @@ func calculate(targets: Dictionary, grid: Grid) -> void:
 		head += 1
 		
 		for neighbor_tile in current_tile.neighbors:
-			if not visited.has(neighbor_tile) and neighbor_tile.walkable:
+			# Include all tiles bordering a reachable tile in the graph, even if they are blocked (INF cost).
+			# This allows flow direction to be calculated away from blocked tiles (like friendly structures).
+			if not visited.has(neighbor_tile):
 				visited[neighbor_tile] = true
 				all_tiles.append(neighbor_tile)
 				flow_data[neighbor_tile.get_coords()] = {"cost": INF, "direction": Vector2i.ZERO}
@@ -85,7 +87,10 @@ func calculate(targets: Dictionary, grid: Grid) -> void:
 		var current_cost: float = flow_data[current_coords]["cost"]
 		
 		for neighbor_tile in current_tile.neighbors:
-			if not neighbor_tile.walkable:
+			# Get the cost of moving onto the neighbor tile, including terrain, structure blocking, and unit density
+			var neighbor_cost_total = neighbor_tile.get_flow_cost(player_id)
+			
+			if neighbor_cost_total == INF:
 				continue
 				
 			var neighbor_coords = neighbor_tile.get_coords()
@@ -95,19 +100,10 @@ func calculate(targets: Dictionary, grid: Grid) -> void:
 
 			var neighbor_flow_cost: float = flow_data[neighbor_coords]["cost"]
 				
-			var density_cost: float = 0.0
-			# Only units actively engaged in combat create density cost
-			if neighbor_tile.occupied_slots:
-				var combat_unit_count: int = 0
-				for unit in neighbor_tile.occupied_slots:
-					if unit != null and is_instance_valid(unit) and unit.player_id == player_id and unit.in_combat:
-						combat_unit_count += 1
-				
-				if combat_unit_count > 0:
-					density_cost = combat_unit_count * GameConfig.DENSITY_COST_MULTIPLIER
-					# Removed counting of reserved formation slots
-					
-			var new_cost: float = current_cost + neighbor_tile.cost + density_cost
+			# Calculate the new accumulated cost
+			# neighbor_cost_total already includes terrain cost and friendly unit density cost.
+			# It is 0.0 if the tile is a target (enemy unit/structure).
+			var new_cost: float = current_cost + neighbor_cost_total
 			
 			# Relaxation
 			if new_cost < neighbor_flow_cost:
@@ -123,28 +119,30 @@ func calculate(targets: Dictionary, grid: Grid) -> void:
 			
 		var tile_flow_data = flow_data[tile_coords]
 		
-		# Check if the tile is reachable (not INF)
-		if tile_flow_data["cost"] != INF:
-			var best_neighbor_coords: Vector2i = Vector2i.ZERO
-			var min_cost: float = INF
+		# We calculate flow direction even for blocked tiles (INF cost),
+		# allowing units to move away from them towards the lowest cost neighbor.
+		
+		# Find the neighbor with the minimum flow cost
+		var best_neighbor_coords: Vector2i = Vector2i.ZERO
+		var min_cost: float = INF
+		
+		for neighbor_tile in tile_to_check.neighbors:
+			var neighbor_coords = neighbor_tile.get_coords()
 			
-			for neighbor_tile in tile_to_check.neighbors:
-				var neighbor_coords = neighbor_tile.get_coords()
+			if flow_data.has(neighbor_coords):
+				var neighbor_cost = flow_data[neighbor_coords]["cost"]
 				
-				if flow_data.has(neighbor_coords):
-					var neighbor_cost = flow_data[neighbor_coords]["cost"]
-					
-					# Find the neighbor with the minimum flow_cost
-					if neighbor_cost < min_cost:
-						min_cost = neighbor_cost
-						best_neighbor_coords = neighbor_coords
-			
-			# Check if we found a path to a better tile (i.e. cost is lower than current tile's cost)
-			# Only update direction if a lower cost neighbor was found.
-			if best_neighbor_coords != Vector2i.ZERO and min_cost < tile_flow_data["cost"]:
-				var flow_direction = best_neighbor_coords - tile_coords
-				# flow_direction is the Vector2i offset from the current tile to the lowest cost neighbor
-				flow_data[tile_coords]["direction"] = flow_direction
+				# Find the neighbor with the minimum flow_cost
+				if neighbor_cost < min_cost:
+					min_cost = neighbor_cost
+					best_neighbor_coords = neighbor_coords
+		
+		# Check if we found a path to a better tile (i.e. cost is lower than current tile's cost)
+		# Note: If the current tile cost is INF, min_cost is almost always less than current cost.
+		if best_neighbor_coords != Vector2i.ZERO and min_cost < tile_flow_data["cost"]:
+			var flow_direction = best_neighbor_coords - tile_coords
+			# flow_direction is the Vector2i offset from the current tile to the lowest cost neighbor
+			flow_data[tile_coords]["direction"] = flow_direction
 
 ## Query Methods ##
 

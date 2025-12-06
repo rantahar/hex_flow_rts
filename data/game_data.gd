@@ -64,6 +64,32 @@ const UNIT_TYPES = {
 		"unit_types": ["scout"]
 	},
 }
+
+const STRUCTURE_TYPES = {
+	"base": {
+		"display_name": "Main Base",
+		"mesh_path": "res://assets/robot_simple.obj",
+		"max_health": 1000.0,
+		"size": 0.4,
+		"resource_generation_rate": 1.0,
+		"cost": 0,
+		"buildable": false,
+		"structure_type": "resource_generator"
+	},
+	
+	"drone_factory": {
+		"display_name": "Drone Factory",
+		"mesh_path": "res://assets/robot_simple.obj",
+		"max_health": 500.0,
+		"size": 0.35,
+		"cost": 200,
+		"buildable": true,
+		"structure_type": "unit_producer",
+		"produces_unit_type": "infantry",
+		"production_time": 5.0
+	},
+}
+
 const TILES = {
 	"grass": {
 		"mesh_path": "res://assets/kenney_3d_hex/Models/OBJ format/grass.obj",
