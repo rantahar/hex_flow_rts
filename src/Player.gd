@@ -17,6 +17,7 @@ var flow_field = null # Assumes FlowField is globally available or handled by Ga
 var units: Array = []
 var structures: Array[Structure] = []
 var resources: float = 0.0
+var config: Dictionary = {} # Store player configuration for type checking, etc.
 var spawn_tile: Tile
 
 
@@ -169,6 +170,7 @@ func calculate_flow(grid: Grid) -> void:
 func _init(p_id: int, config: Dictionary):
 	# Initialize properties that cannot use default values or require calculation
 	id = p_id
+	self.config = config
 	resources = config.get("starting_resources", 100.0)
 	structures = [] # Initialized to empty array
 

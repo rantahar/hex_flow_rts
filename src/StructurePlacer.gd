@@ -9,7 +9,7 @@ const Grid = preload("res://src/core/Grid.gd")
 # State tracking for placement mode
 var active: bool = false
 var current_structure_type: String = ""
-var placing_player_id: int = -1
+var placing_player: Player = null
 
 # Placeholder for the visual preview node
 var preview_instance = null
@@ -21,9 +21,8 @@ func _init():
 func is_active() -> bool:
 	return active
 
-func enter_placement_mode(structure_type: String, player_id: int):
+func enter_placement_mode(structure_type: String):
 	current_structure_type = structure_type
-	placing_player_id = player_id
 	active = true
 	
 	var config = GameData.STRUCTURE_TYPES.get(structure_type)
@@ -77,12 +76,11 @@ func enter_placement_mode(structure_type: String, player_id: int):
 		
 	preview_instance.visible = false
 	
-	print("StructurePlacer: Entered placement mode for %s (Player %d)" % [structure_type, player_id])
+	print("StructurePlacer: Entered placement mode for %s (Player %d)" % [structure_type, placing_player.id if placing_player else -1])
 	
 func exit_placement_mode():
 	active = false
 	current_structure_type = ""
-	placing_player_id = -1
 	
 	# Clean up preview mesh
 	if is_instance_valid(preview_instance):
@@ -90,7 +88,7 @@ func exit_placement_mode():
 	
 	print("StructurePlacer: Exited placement mode.")
 
-func update_preview(hovered_tile: Tile, player: Player):
+func update_preview(hovered_tile: Tile):
 	# 1. Hide preview and return if no tile is hovered
 	if not is_instance_valid(hovered_tile):
 		if is_instance_valid(preview_instance):
@@ -144,6 +142,12 @@ func update_preview(hovered_tile: Tile, player: Player):
 	if is_instance_valid(hovered_tile.structure):
 		is_valid = false
 	
+	# Retrieve Player instance
+	var player = placing_player
+	
+	if not is_instance_valid(player):
+		is_valid = false
+
 	# Check player.can_afford(current_structure_type)
 	if is_valid and not player.can_afford(current_structure_type):
 		is_valid = false
@@ -174,8 +178,13 @@ func _input(event):
 		exit_placement_mode()
 		return
 
-func attempt_placement(tile: Tile, player: Player, map_node: Node3D) -> bool:
-	# This logic is based on the previously removed Game._on_build_requested logic, 
+# New method to initialize the human player reference
+func set_human_player(player_ref: Player):
+	placing_player = player_ref
+	print("StructurePlacer: Human Player set to Player %d." % placing_player.id if placing_player else -1)
+
+func attempt_placement(tile: Tile, map_node: Node3D) -> bool:
+	# This logic is based on the previously removed Game._on_build_requested logic,
 	# which we assume should be handled here now.
 	
 	if not is_instance_valid(tile) or tile.structure != null:
@@ -187,14 +196,19 @@ func attempt_placement(tile: Tile, player: Player, map_node: Node3D) -> bool:
 		push_error("StructurePlacer: Invalid structure type %s." % current_structure_type)
 		return false
 		
+	# Player is already stored in placing_player	
+	if not is_instance_valid(placing_player):
+		push_error("StructurePlacer.attempt_placement: Human player reference is invalid.")
+		return false
+		
 	var cost = structure_config.get("cost", 0.0)
 	
-	if player.resources < cost:
-		print("StructurePlacer: Not enough resources to build %s (Requires %f, Have %f)." % [current_structure_type, cost, player.resources])
+	if placing_player.resources < cost:
+		print("StructurePlacer: Not enough resources to build %s (Requires %f, Have %f)." % [current_structure_type, cost, placing_player.resources])
 		return false
 
 	# Place the structure (Player.gd handles resource deduction and adding to map)
-	var success = player.place_structure(current_structure_type, tile, map_node)
+	var success = placing_player.place_structure(current_structure_type, tile, map_node)
 	
 	# Exit placement mode only if placement was successful? No, usually not. 
 	# We let the Game node decide when to exit placement mode (e.g., if we want auto-exit or sustained placement).

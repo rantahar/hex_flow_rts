@@ -134,12 +134,14 @@ const PLAYER_CONFIGS = [
 		"id": 0,
 		"display_name": "Red Team",
 		"color": Color.RED,
-		"starting_resources": 1000.0
+		"starting_resources": 1000.0,
+		"type": "human",
 	},
 	{
 		"id": 1,
 		"display_name": "Blue Team",
 		"color": Color.BLUE,
-		"starting_resources": 1000.0
+		"starting_resources": 1000.0,
+		"type": "ai",
 	}
 ]

@@ -6,12 +6,11 @@ const ResourceDisplay = preload("res://src/ResourceDisplay.gd")
 const BuildMenu = preload("res://src/BuildMenu.gd")
 # Placeholder constant until StructurePlacer.gd is created
 const StructurePlacer = preload("res://src/StructurePlacer.gd")
+const AIPlayer = preload("res://src/AIPlayer.gd")
 
 @onready var map_node = $Map
 @onready var canvas_layer = $CanvasLayer
 @onready var structure_placer: StructurePlacer = $StructurePlacer
-
-var placing_player_id: int = -1 # which player (0 or 1) is currently placing
 
 var players: Array[Player] = []
 var player_visualizers: Array[FlowFieldVisualizer] = []
@@ -34,7 +33,17 @@ func initialize_players(player_configs: Array) -> void:
 	players.clear()
 	
 	for config in player_configs:
-		var player_node = Player.new(config["id"], config)
+		var player_node
+		
+		var player_type = config.get("type", "human") # Default to human
+		
+		if player_type == "human":
+			player_node = Player.new(config["id"], config)
+		elif player_type == "ai":
+			player_node = AIPlayer.new(config["id"], config)
+		else:
+			push_error("Unknown player type '%s' found in config for Player ID %d." % [player_type, config["id"]])
+			continue
 		
 		# Set Node properties and Data class properties
 		player_node.id = config["id"]
@@ -135,8 +144,15 @@ func _ready() -> void:
 	var player0 = get_player(0)
 	var player1 = get_player(1)
 	
-	# Assume player 0 is the human player
-	var human_player = player0
+	# Determine the human player dynamically based on config
+	var human_player: Player = null
+	for p in players:
+		if is_instance_valid(p) and p.config.get("type") == "human":
+			human_player = p
+			break
+	
+	if human_player == null:
+		push_warning("No human player found in configuration.")
 
 	var grid = map_node.get_node("Grid")
 	
@@ -170,17 +186,19 @@ func _ready() -> void:
 			push_error("Failed to place base for Player %d at %s." % [player.id, player.spawn_tile.get_coords()])
 			continue
 
-		# 2. For testing, place a Drone Factory next to the base (cost 200, buildable)
-		var factory_tile = _find_free_neighbor_tile(grid, player.spawn_tile)
-		if is_instance_valid(factory_tile):
-			# Note: Drone factory costs 200 resources, but the player starts with 1000.
-			var factory_success = player.place_structure("drone_factory", factory_tile, map_node)
-			if not factory_success:
-				push_error("Failed to place drone_factory for Player %d next to base at %s." % [player.id, factory_tile.get_coords()])
-		else:
-			push_error("Could not find a free tile next to the base for Player %d to place drone_factory." % player.id)
-			
-	# UI Setup for the human player (player 0)
+		# 2. Call AI start turn logic if applicable
+		if player.config.get("type") == "ai":
+			# Ensure we only call this on AI players
+			if player is AIPlayer:
+				player.start_turn(map_node)
+			else:
+				push_error("Player ID %d configured as 'ai' but is not an AIPlayer instance." % player.id)
+
+	# Set the human player reference on the StructurePlacer instance
+	if is_instance_valid(structure_placer) and is_instance_valid(human_player):
+		structure_placer.set_human_player(human_player)
+		
+	# UI Setup for the human player
 	if is_instance_valid(human_player) and is_instance_valid(canvas_layer):
 		# Paths assume CanvasLayer is a direct child of Game, and MarginContainer is a direct child of CanvasLayer.
 		# Assumes the first MarginContainer holds ResourceDisplay and the second holds BuildMenu.
@@ -213,20 +231,12 @@ func _ready() -> void:
 
 func _on_structure_selected(structure_type: String):
 	"""
-	Initiates structure placement mode for the human player (Player 0).
+	Initiates structure placement mode for the human player.
 	"""
-	var player_id = 0 # Human player
-	var player = get_player(player_id)
-	
-	if not is_instance_valid(player):
-		push_error("Game._on_structure_selected: Player %d not found." % player_id)
-		return
-		
-	placing_player_id = player_id
-	
+
 	if is_instance_valid(structure_placer):
-		structure_placer.enter_placement_mode(structure_type, placing_player_id)
-		print("Game: Entered placement mode for %s (Player %d)." % [structure_type, placing_player_id])
+		structure_placer.enter_placement_mode(structure_type)
+		print("Game: Entered placement mode for %s." % structure_type)
 	else:
 		push_error("Game._on_structure_selected: StructurePlacer node is not set up.")
 
@@ -235,18 +245,11 @@ func _on_hex_clicked(tile: Tile):
 	Handles a click on a hexagonal tile, primarily for structure placement confirmation.
 	"""
 	if is_instance_valid(structure_placer) and structure_placer.is_active():
-		if placing_player_id == -1:
-			push_error("Game._on_hex_clicked: Placing player ID is invalid.")
-			structure_placer.exit_placement_mode()
-			return
-			
-		var player = get_player(placing_player_id)
-		
 		# structure_placer.attempt_placement handles resource checks and calling player.place_structure
-		var success = structure_placer.attempt_placement(tile, player, map_node)
+		var success = structure_placer.attempt_placement(tile, map_node)
 		
 		if success:
-			print("Game: Structure placed successfully by Player %d at %s." % [placing_player_id, tile.get_coords()])
+			print("Game: Structure placed successfully at %s." % tile.get_coords())
 		
 		# Always consume the click event if placement mode is active
 		return
@@ -303,20 +306,18 @@ func _get_hovered_tile() -> Tile:
 # Handles placement preview updates and cancellation
 func _process(delta: float) -> void:
 	if is_instance_valid(structure_placer) and structure_placer.is_active():
-		
 		# Handle cancellation:
 		if Input.is_action_just_pressed("ui_cancel"):
 			structure_placer.exit_placement_mode()
 			print("Game: Placement mode cancelled.")
-			placing_player_id = -1
 			return
 
 		# Handle placement preview updates:
 		var hovered_tile = _get_hovered_tile()
-		var player = get_player(0) # Human player is always Player 0
 		
-		if is_instance_valid(hovered_tile) and is_instance_valid(player):
-			structure_placer.update_preview(hovered_tile, player)
+		# Only update preview if placement mode is active for a valid player
+		if is_instance_valid(hovered_tile):
+			structure_placer.update_preview(hovered_tile)
 
 
 # Initializes flow fields and visualization after a delay
