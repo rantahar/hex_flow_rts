@@ -19,7 +19,7 @@ const UNIT_TYPES = {
 		# Damage dealt per successful attack
 		"attack_damage": 10.0,
 		# Maximum distance to attack target, measured in hex units
-		"attack_range": 1.0,
+		"attack_range": 2.0,
 		# Time in seconds required between attacks
 		"attack_cooldown": 1.5,
 		# Maximum distance the unit can see, measured in hex units

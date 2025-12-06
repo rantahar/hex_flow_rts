@@ -1,9 +1,11 @@
 extends Node3D
 class_name Unit
 const HealthBar3D = preload("res://src/HealthBar3D.gd")
+const Grid = preload("res://src/core/Grid.gd")
 
 var health_bar: HealthBar3D
-
+var muzzle_flash: OmniLight3D
+var muzzle_flash_timer: Timer
 
 # Store: player_id (int), hex_x (int), hex_z (int)
 var config: Dictionary = {}
@@ -98,6 +100,22 @@ func _init(unit_config: Dictionary, p_player_id: int, p_current_tile: Tile, worl
 	health_bar.setup(scaled_unit_size)
 	
 	health_bar.update_health(health, max_health)
+	# Muzzle Flash setup (OmniLight3D)
+	muzzle_flash = OmniLight3D.new()
+	muzzle_flash.name = "MuzzleFlash"
+	muzzle_flash.light_energy = 0.0 # Hidden by default
+	muzzle_flash.omni_range = 0.5
+	muzzle_flash.light_color = Color(1.0, 0.7, 0.3)
+	muzzle_flash.position = Vector3(0.05, 0, 0) # Front-right relative to unit
+	add_child(muzzle_flash)
+	
+	# Muzzle Flash Timer setup
+	muzzle_flash_timer = Timer.new()
+	muzzle_flash_timer.name = "MuzzleFlashTimer"
+	muzzle_flash_timer.wait_time = 0.15
+	muzzle_flash_timer.one_shot = true
+	muzzle_flash_timer.connect("timeout", _on_muzzle_flash_timeout)
+	add_child(muzzle_flash_timer)
 
 # Called when this unit takes damage.
 func take_damage(amount: float):
@@ -190,26 +208,71 @@ func _process(delta: float):
 # Finds the closest enemy unit in any neighboring tile (Euclidean distance squared)
 # Returns the closest enemy unit instance, or null.
 func _get_closest_enemy_in_range() -> Unit:
-	if not current_tile:
+	if not current_tile or not grid:
 		return null
+
+	var attack_range_hex: float = config.get("attack_range", 0.0)
+	var max_hex_distance: int = ceil(attack_range_hex) + 1
 	
+	if max_hex_distance <= 0:
+		return null
+		
+	# Calculate attack range in world units (squared for comparison optimization)
+	var attack_range_world: float = attack_range_hex * Grid.HEX_SCALE
+	var attack_range_world_sq: float = attack_range_world * attack_range_world
+
 	var closest_enemy: Unit = null
-	# Initialize minimum distance squared to a very large number
-	var min_distance_sq: float = 1e20
+	# Initialize minimum distance squared to the attack range squared + 1 (slightly outside initial range)
+	var min_distance_sq: float = attack_range_world_sq + 1.0
+
+	var current_coords: Vector2i = Vector2i(current_tile.x, current_tile.z)
+	var visited_coords: Dictionary = {current_coords: 0} # {Vector2i: hex_distance}
+	var tiles_to_check: Array[Vector2i] = [current_coords]
 	
-	# Only check neighbors for combat range
-	for neighbor_tile in current_tile.neighbors:
-		if is_instance_valid(neighbor_tile) and neighbor_tile.has_enemy_units(player_id):
+	var self_pos: Vector3 = position
+	
+	var head = 0
+	while head < tiles_to_check.size():
+		var tile_coords = tiles_to_check[head]
+		var hex_distance = visited_coords[tile_coords]
+		head += 1
+
+		# Stop searching if we exceed the calculated max hex distance + 1 (already processed the max distance tiles)
+		# Note: max_hex_distance includes the tiles at that distance.
+		if hex_distance > max_hex_distance:
+			continue
+
+		var tile_ref: Tile = grid.get_tile_by_coords(tile_coords)
+		if not is_instance_valid(tile_ref):
+			continue
+		
+		# Check if tile has enemy units
+		if tile_ref.has_enemy_units(player_id):
 			# Iterate over occupied slots on the enemy tile
-			for unit_ref in neighbor_tile.occupied_slots:
+			for unit_ref in tile_ref.occupied_slots:
 				if is_instance_valid(unit_ref) and unit_ref.player_id != player_id:
-					# Calculate distance squared to this enemy unit's position
-					var distance_sq = position.distance_squared_to(unit_ref.position)
+					# Calculate exact distance squared to enemy unit position
+					var distance_sq = self_pos.distance_squared_to(unit_ref.position)
 					
-					if distance_sq < min_distance_sq:
+					# Track closest enemy (minimum distance) AND ensure it is within range
+					if distance_sq <= attack_range_world_sq and distance_sq < min_distance_sq:
 						min_distance_sq = distance_sq
 						closest_enemy = unit_ref
 						
+		
+		# Explore neighbors for the next iteration (BFS)
+		if hex_distance < max_hex_distance:
+			# Get offsets based on row parity (Odd-R offset)
+			var offsets: Array[Vector2i] = Grid.ODD_R_NEIGHBOR_OFFSETS_EVEN if tile_coords.y % 2 == 0 else Grid.ODD_R_NEIGHBOR_OFFSETS_ODD
+			
+			for offset in offsets:
+				var neighbor_coords = tile_coords + offset
+				
+				# Only add unvisited tiles that are valid
+				if not visited_coords.has(neighbor_coords) and grid.is_valid_coords(neighbor_coords):
+					visited_coords[neighbor_coords] = hex_distance + 1
+					tiles_to_check.append(neighbor_coords)
+
 	return closest_enemy
 
 func _try_attack():
@@ -223,6 +286,11 @@ func _try_attack():
 	if is_instance_valid(target_unit):
 		# Attack
 		target_unit.take_damage(attack_damage)
+		
+		# Muzzle flash activation
+		muzzle_flash.light_energy = 1.0
+		muzzle_flash_timer.start()
+		
 		last_attack_time = current_time
 		
 		# Optional: Rotate to face enemy (Horizontal only)
@@ -328,7 +396,7 @@ func _move_to_next_tile():
 		is_moving = false
 		return
 	
-	# 3. Check for enemies in neighboring tiles (1 hex range)
+	# 3. Check for enemies in attack range
 	if _get_closest_enemy_in_range():
 		# Cannot move if an enemy is in range
 		is_moving = false
@@ -363,3 +431,8 @@ func _move_to_next_tile():
 	target_world_pos = formation_position
 	
 	return
+
+# --- Muzzle Flash Timer Callback ---
+
+func _on_muzzle_flash_timeout():
+	muzzle_flash.light_energy = 0.0

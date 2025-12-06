@@ -101,6 +101,10 @@ func hex_to_world(x: int, z: int) -> Vector3:
 func is_valid_coords(coords: Vector2i) -> bool:
 	return tiles.has(coords)
 
+func get_tile_by_coords(coords: Vector2i):
+	if tiles.has(coords):
+		return tiles[coords]
+	return null
 
 func connect_neighbors():
 	# Iterate over every tile in the grid
