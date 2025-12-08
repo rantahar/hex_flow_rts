@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3 uid="uid://cmri410y4al53"]
+[gd_scene load_steps=14 format=3 uid="uid://cmri410y4al53"]
 
 [ext_resource type="Script" path="res://src/RTSCamera.gd" id="1_i1nf2"]
 [ext_resource type="Script" path="res://src/core/MapGenerator.gd" id="1_r4x5c"]
@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://src/BuildMenu.gd" id="9_8ixy4"]
 [ext_resource type="Script" path="res://src/FlowFieldVisualizer.gd" id="9_83565"]
 [ext_resource type="Script" path="res://src/Game.gd" id="10_gds"]
+[ext_resource type="Script" path="res://src/PlacementOverlay.gd" id="10_vst7w"]
 [ext_resource type="Script" path="res://src/StructurePlacer.gd" id="10_wlmfl"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_favtp"]
@@ -80,3 +81,6 @@ script = ExtResource("9_8ixy4")
 
 [node name="StructurePlacer" type="Node3D" parent="."]
 script = ExtResource("10_wlmfl")
+
+[node name="PlacementOverlay" type="Node3D" parent="."]
+script = ExtResource("10_vst7w")

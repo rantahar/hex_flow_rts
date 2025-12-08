@@ -67,26 +67,76 @@ const UNIT_TYPES = {
 
 const STRUCTURE_TYPES = {
 	"base": {
-		"display_name": "Main Base",
+		"display_name": "Base",
 		"mesh_path": "res://assets/robot_simple.obj",
-		"max_health": 100.0,
-		"size": 0.4,
-		"resource_generation_rate": 1.0,
-		"cost": 0,
-		"buildable": false,
-		"structure_type": "resource_generator"
+		"size": 0.3,
+		"cost": 500,
+		"buildable": true,
+		"max_health": 1000,
+		"income_rate": 10,
+		"self_repair_rate": 1,
+		"min_spacing": 5,
+		"category": "base"
 	},
 	
 	"drone_factory": {
 		"display_name": "Drone Factory",
 		"mesh_path": "res://assets/robot_simple.obj",
-		"max_health": 100.0,
 		"size": 0.2,
-		"cost": 100,
 		"buildable": true,
+		"cost": 150,
+		"max_health": 200,
 		"structure_type": "unit_producer",
 		"produces_unit_type": "infantry",
-		"production_time": 5.0
+		"production_time": 5.0,
+		"production_rate_max": 1.0,
+		"category": "improvement"
+	},
+	
+	"income_upgrade": {
+		"display_name": "Income Upgrade",
+		"mesh_path": "res://assets/robot_simple.obj",
+		"size": 0.3,
+		"cost": 100,
+		"max_health": 150,
+		"income_bonus": 5,
+		"category": "improvement"
+	},
+	
+	"cannon": {
+		"display_name": "Cannon",
+		"mesh_path": "res://assets/robot_simple.obj",
+		"size": 0.3,
+		"cost": 120,
+		"max_health": 250,
+		"attack_damage": 25,
+		"attack_range": 4,
+		"attack_cooldown": 1.5,
+		"category": "improvement"
+	},
+	
+	"transport_hub": {
+		"display_name": "Transport Hub",
+		"mesh_path": "res://assets/robot_simple.obj",
+		"size": 0.3,
+		"cost": 80,
+		"max_health": 100,
+		"speed_multiplier": 1.5,
+		"effect_radius": 6,
+		"category": "forward"
+	},
+	
+	"artillery": {
+		"display_name": "Artillery",
+		"mesh_path": "res://assets/robot_simple.obj",
+		"size": 0.3,
+		"cost": 200,
+		"max_health": 150,
+		"attack_damage": 40,
+		"attack_range": 8,
+		"attack_cooldown": 3.0,
+		"aoe_radius": 2,
+		"category": "forward"
 	},
 }
 

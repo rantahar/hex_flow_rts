@@ -16,6 +16,8 @@ var target: Vector2i = Vector2i.ZERO
 var flow_field = null # Assumes FlowField is globally available or handled by Game.gd
 var units: Array = []
 var structures: Array[Structure] = []
+# Dictionary for O(1) structure lookup by grid coordinates: {Vector2i: Structure}
+var structures_by_coord: Dictionary = {}
 var resources: float = 0.0
 var config: Dictionary = {} # Store player configuration for type checking, etc.
 var spawn_tile: Tile
@@ -280,6 +282,8 @@ func place_structure(structure_key: String, target_tile: Tile, map_node: Node3D)
 	
 	# Add structure to player's array
 	structures.append(structure_instance)
+	# Add structure to coordinate lookup map
+	structures_by_coord[target_tile.get_coords()] = structure_instance
 	
 	# Handle unit producers and resource generators that need to start working
 	if structure_instance.structure_type == "unit_producer":
@@ -293,3 +297,9 @@ func place_structure(structure_key: String, target_tile: Tile, map_node: Node3D)
 	
 	print("Player %d successfully placed structure '%s' at %s. Remaining resources: %f" % [id, structure_key, target_tile.get_coords(), resources])
 	return true
+
+func get_structure_at_coords(coords: Vector2i) -> Structure:
+	"""
+	Retrieves the Structure instance at the given grid coordinates, if owned by this player.
+	"""
+	return structures_by_coord.get(coords, null)

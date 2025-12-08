@@ -209,3 +209,54 @@ func connect_neighbors():
 		# Store coordinates in the Tile object for quick access and consistency.
 		tile.x = coords.x
 		tile.z = coords.y
+
+func get_reachable_tiles(start_coord: Vector2i) -> Array[Vector2i]:
+	"""
+	Performs a Breadth-First Search (BFS) to find all walkable tiles
+	reachable from the starting coordinate.
+	A tile is reachable if it is walkable and has a finite cost.
+	
+	Arguments:
+	- start_coord (Vector2i): The grid coordinate (x, z) to start the search from.
+	
+	Returns:
+	- Array[Vector2i]: An array of coordinates for all reachable tiles.
+	"""
+	var start_tile: Tile = get_tile_by_coords(start_coord)
+	
+	# Using Godot's float infinity constant defined in Tile.gd
+	# We rely on Tile being preloaded implicitly by MapGenerator or similar,
+	# but for explicit type hints here, we need it.
+	# Since Tile.gd uses `const Grid = preload("res://src/core/Grid.gd")`,
+	# Grid.gd should probably preload Tile.gd too if we want to use its INF constant,
+	# but `Tile` is already typed in `get_tile_by_coords` which returns a Tile.
+	# For simplicity, I'll redefine INF if it's not globally available or accessible.
+	# Wait, `get_tile_by_coords` is dynamically typed, but the tile itself is a typed class.
+	# I'll use a direct float value as a fallback, or assume the Tile object carries the necessary info.
+	# Tile.gd: const INF: float = 1e20
+	const INF: float = 1e20 # Defining it here to avoid dependency on Tile.gd constants
+	
+	if start_tile == null or not start_tile.walkable or start_tile.cost >= INF:
+		return [] # Start tile is invalid or blocked/unreachable
+		
+	var queue: Array = [start_tile]
+	var visited: Dictionary = {start_coord: true} # Using coordinates for tracking
+	var reachable_coords: Array[Vector2i] = [start_coord]
+	
+	while not queue.is_empty():
+		var current_tile: Tile = queue.pop_front()
+		
+		# Current tile neighbors are already Tile objects
+		for neighbor_tile in current_tile.neighbors:
+			var neighbor_coord: Vector2i = neighbor_tile.get_coords()
+			
+			# Check reachability criteria: walkable and finite cost
+			# We also check if the tile is known to the grid (by checking tiles.has(coord))
+			# but since `current_tile.neighbors` only contains tiles known to the grid,
+			# we only need to check walkability/cost and visited status.
+			if neighbor_tile.walkable and neighbor_tile.cost < INF and not visited.has(neighbor_coord):
+				visited[neighbor_coord] = true
+				reachable_coords.append(neighbor_coord)
+				queue.append(neighbor_tile)
+				
+	return reachable_coords

@@ -7,14 +7,20 @@ const BuildMenu = preload("res://src/BuildMenu.gd")
 # Placeholder constant until StructurePlacer.gd is created
 const StructurePlacer = preload("res://src/StructurePlacer.gd")
 const AIPlayer = preload("res://src/AIPlayer.gd")
+const Structure = preload("res://src/core/Structure.gd") # Added for type hinting
+const PlacementOverlay = preload("res://src/PlacementOverlay.gd")
+
+signal structure_selected(structure: Structure)
 
 @onready var map_node = $Map
 @onready var canvas_layer = $CanvasLayer
 @onready var structure_placer: StructurePlacer = $StructurePlacer
+@onready var placement_overlay: PlacementOverlay = $PlacementOverlay # Assuming this node exists in scene
 
 var players: Array[Player] = []
 var player_visualizers: Array[FlowFieldVisualizer] = []
 var current_visualization_player: int = 0
+var selected_structure: Structure = null # Tracks the currently selected structure
 var visualization_timer: Timer
 var flow_recalculation_timer: Timer
 var game_time_seconds: int = 0
@@ -131,6 +137,20 @@ func _find_free_neighbor_tile(grid: Grid, center_tile: Tile) -> Tile:
 			
 	return null
 
+# Helper function to find the human player instance
+var _human_player: Player = null # Cache the human player instance
+func _get_human_player() -> Player:
+	if _human_player != null:
+		return _human_player
+		
+	for p in players:
+		if is_instance_valid(p) and p.config.get("type") == "human":
+			_human_player = p
+			return _human_player
+			
+	push_warning("No human player found in configuration.")
+	return null
+
 func _ready() -> void:
 	"""
 	Called when the node enters the scene tree for the first time.
@@ -140,19 +160,12 @@ func _ready() -> void:
 	# Initialize players from centralized data
 	initialize_players(GameData.PLAYER_CONFIGS)
 	
+	# Cache human player reference
+	var human_player = _get_human_player()
+	
 	# Set player targets (currently hardcoded as they were not moved to GameData)
 	var player0 = get_player(0)
 	var player1 = get_player(1)
-	
-	# Determine the human player dynamically based on config
-	var human_player: Player = null
-	for p in players:
-		if is_instance_valid(p) and p.config.get("type") == "human":
-			human_player = p
-			break
-	
-	if human_player == null:
-		push_warning("No human player found in configuration.")
 
 	var grid = map_node.get_node("Grid")
 	
@@ -166,6 +179,11 @@ func _ready() -> void:
 	if player0 and grid:
 		player0.target = P0_TARGET_COORDS
 		player0.spawn_tile = _find_walkable_spawn_tile(grid, P0_SPAWN_COORDS)
+		
+	# Setup placement overlay with Grid reference
+	if is_instance_valid(placement_overlay) and is_instance_valid(grid):
+		placement_overlay.set_grid(grid)
+		
 		if player0.spawn_tile:
 			player0.calculate_flow(grid) # Trigger P0 flow calculation
 		
@@ -198,6 +216,10 @@ func _ready() -> void:
 	if is_instance_valid(structure_placer) and is_instance_valid(human_player):
 		structure_placer.set_human_player(human_player)
 		
+	# Setup StructurePlacer with necessary references
+	if is_instance_valid(structure_placer) and is_instance_valid(grid) and is_instance_valid(placement_overlay):
+		structure_placer.setup(grid, placement_overlay)
+
 	# UI Setup for the human player
 	if is_instance_valid(human_player) and is_instance_valid(canvas_layer):
 		# Paths assume CanvasLayer is a direct child of Game, and MarginContainer is a direct child of CanvasLayer.
@@ -242,18 +264,48 @@ func _on_structure_selected(structure_type: String):
 
 func _on_hex_clicked(tile: Tile):
 	"""
-	Handles a click on a hexagonal tile, primarily for structure placement confirmation.
+	Handles a click on a hexagonal tile, primarily for structure placement confirmation and selection.
 	"""
+	if not is_instance_valid(tile):
+		return
+		
+	var coords = tile.get_coords()
+	var human_player = _get_human_player()
+
 	if is_instance_valid(structure_placer) and structure_placer.is_active():
-		# structure_placer.attempt_placement handles resource checks and calling player.place_structure
+		# --- A. Structure Placement ---
 		var success = structure_placer.attempt_placement(tile, map_node)
 		
 		if success:
-			print("Game: Structure placed successfully at %s." % tile.get_coords())
+			print("Game: Structure placed successfully at %s." % coords)
 		
 		# Always consume the click event if placement mode is active
 		return
-	# If placement mode is inactive, the RTSCamera handles the click as normal unit movement/selection.
+
+	# --- B. Structure Selection (if placement mode is inactive) ---
+	if is_instance_valid(human_player):
+		var clicked_structure: Structure = human_player.get_structure_at_coords(coords)
+		
+		if is_instance_valid(clicked_structure):
+			# If the tile has a structure owned by the player, select it.
+			if clicked_structure.player_id == human_player.id:
+				selected_structure = clicked_structure
+				print("Game: Selected structure at %s." % coords)
+				structure_selected.emit(selected_structure)
+				return
+			else:
+				# Clicking an enemy structure: clear selection.
+				selected_structure = null
+				structure_selected.emit(null)
+				return
+		
+	# Clicking an empty tile or non-player-owned entity (if not handled by RTSCamera for units): clear selection
+	if selected_structure != null:
+		selected_structure = null
+		print("Game: Selection cleared.")
+		structure_selected.emit(null)
+		
+	# Allow RTSCamera to handle the click (e.g., unit movement/selection).
 	pass
 
 

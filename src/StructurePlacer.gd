@@ -5,11 +5,14 @@ const GameData = preload("res://data/game_data.gd")
 const Tile = preload("res://src/core/Tile.gd")
 const Player = preload("res://src/Player.gd")
 const Grid = preload("res://src/core/Grid.gd")
+const PlacementOverlay = preload("res://src/PlacementOverlay.gd") # Added for type hinting
 
 # State tracking for placement mode
 var active: bool = false
 var current_structure_type: String = ""
 var placing_player: Player = null
+var grid_ref: Grid = null
+var overlay_ref: PlacementOverlay = null
 
 # Placeholder for the visual preview node
 var preview_instance = null
@@ -26,6 +29,40 @@ func enter_placement_mode(structure_type: String):
 	active = true
 	
 	var config = GameData.STRUCTURE_TYPES.get(structure_type)
+	
+	# Determine reachable tiles for placement and show overlay
+	# References should be set via setup() in Game._ready()
+	var grid = grid_ref
+	var overlay = overlay_ref
+	
+	# Get Game node reference to access selected_structure
+	var game = get_parent()
+	
+	if is_instance_valid(grid) and is_instance_valid(overlay) and is_instance_valid(game):
+		var starting_coords: Vector2i
+		# Use selected structure if available, otherwise use spawn tile (main base)
+		if is_instance_valid(game.selected_structure):
+			starting_coords = game.selected_structure.current_tile.get_coords()
+		elif is_instance_valid(placing_player) and is_instance_valid(placing_player.spawn_tile):
+			starting_coords = placing_player.spawn_tile.get_coords()
+		else:
+			push_error("StructurePlacer: Cannot determine starting point for reachability.")
+			active = false
+			return
+			
+		var reachable_tiles = grid.get_reachable_tiles(starting_coords)
+		overlay.show_reachable(reachable_tiles)
+	else:
+		if not is_instance_valid(grid) or not is_instance_valid(overlay):
+			push_error("StructurePlacer: Missing Grid or PlacementOverlay reference. Setup likely failed.")
+		elif not is_instance_valid(game):
+			push_error("StructurePlacer: Missing Game node reference.")
+		
+		active = false
+		return
+	
+	
+	# 1. Load mesh
 	if not config:
 		push_error("StructurePlacer: Invalid structure type '%s'." % structure_type)
 		active = false
@@ -82,6 +119,11 @@ func exit_placement_mode():
 	active = false
 	current_structure_type = ""
 	
+	# Clear placement overlay
+	var game = get_parent()
+	if is_instance_valid(game) and is_instance_valid(game.placement_overlay):
+		game.placement_overlay.clear()
+		
 	# Clean up preview mesh
 	if is_instance_valid(preview_instance):
 		preview_instance.visible = false
@@ -98,7 +140,8 @@ func update_preview(hovered_tile: Tile):
 	if not is_instance_valid(preview_instance):
 		return
 
-	# Dynamically fetch map node from parent (Game)
+	# Dynamically fetch map node from parent (Game) for map_node.get_height_at_world_pos
+	# NOTE: grid_ref and overlay_ref are set via setup()
 	var game_node = get_parent()
 	if not is_instance_valid(game_node) or not is_instance_valid(game_node.map_node):
 		push_error("StructurePlacer: Cannot find Map node reference on parent Game node.")
@@ -134,6 +177,9 @@ func update_preview(hovered_tile: Tile):
 	# 3. Validate placement
 	var is_valid: bool = true
 	
+	# NOTE: We skip range/reachability check here since PlacementOverlay already handled it
+	# by only showing valid tiles (for simplicity and performance).
+	
 	# Check tile buildable terrain
 	if not hovered_tile.is_buildable_terrain():
 		is_valid = false
@@ -162,21 +208,12 @@ func update_preview(hovered_tile: Tile):
 	if is_instance_valid(preview_instance.material_override) and preview_instance.material_override is StandardMaterial3D:
 		preview_instance.material_override.albedo_color = color
 	
-func _input(event):
-	if not active:
-		return
-	
-	# Check for ESC key press (ui_cancel action)
-	if event.is_action_pressed("ui_cancel"):
-		get_viewport().set_input_as_handled()
-		exit_placement_mode()
-		return
-		
-	# Check for Right Mouse Button (RMB) press (cancel placement)
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.is_pressed():
-		get_viewport().set_input_as_handled()
-		exit_placement_mode()
-		return
+
+# New method to initialize core references
+func setup(grid: Grid, overlay: PlacementOverlay):
+	grid_ref = grid
+	overlay_ref = overlay
+	print("StructurePlacer: Grid and PlacementOverlay references set.")
 
 # New method to initialize the human player reference
 func set_human_player(player_ref: Player):
