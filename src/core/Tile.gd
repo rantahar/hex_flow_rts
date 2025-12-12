@@ -135,6 +135,30 @@ func is_flow_target(player_id: int) -> bool:
 		
 	return false
 
+func set_overlay_tint(color: Color):
+	"""
+	Sets a tint color override on the tile's primary mesh to indicate selection/hover state.
+	Assumes the ground mesh is the first MeshInstance3D child of the tile's node.
+	
+	Arguments:
+	- color (Color): The color to tint the tile with (including alpha).
+	"""
+	if not is_instance_valid(node):
+		push_error("Tile (%d, %d): Node is invalid, cannot set tint." % [x, z])
+		return
+		
+	for child in node.get_children():
+		if child is MeshInstance3D:
+			# Use material_overlay to blend on top of existing materials
+			if not is_instance_valid(child.material_overlay):
+				child.material_overlay = StandardMaterial3D.new()
+				child.material_overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+				child.material_overlay.cull_mode = BaseMaterial3D.CULL_DISABLED
+			child.material_overlay.albedo_color = color
+			return # Assuming only one mesh to tint
+	
+	push_warning("Tile (%d, %d): Could not find MeshInstance3D child on node to apply tint." % [x, z])
+
 # Calculates the flow field cost for a unit of player_id attempting to move onto this tile.
 func get_flow_cost(player_id: int) -> float:
 	"""

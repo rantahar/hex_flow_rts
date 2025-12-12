@@ -4,18 +4,12 @@ const GameData = preload("res://data/game_data.gd")
 const GameConfig = preload("res://data/game_config.gd")
 const ResourceDisplay = preload("res://src/ResourceDisplay.gd")
 const BuildMenu = preload("res://src/BuildMenu.gd")
-# Placeholder constant until StructurePlacer.gd is created
-const StructurePlacer = preload("res://src/StructurePlacer.gd")
-const AIPlayer = preload("res://src/AIPlayer.gd")
-const Structure = preload("res://src/core/Structure.gd") # Added for type hinting
-const PlacementOverlay = preload("res://src/PlacementOverlay.gd")
 
 signal structure_selected(structure: Structure)
 
 @onready var map_node = $Map
 @onready var canvas_layer = $CanvasLayer
 @onready var structure_placer: StructurePlacer = $StructurePlacer
-@onready var placement_overlay: PlacementOverlay = $PlacementOverlay # Assuming this node exists in scene
 
 var players: Array[Player] = []
 var player_visualizers: Array[FlowFieldVisualizer] = []
@@ -179,19 +173,14 @@ func _ready() -> void:
 	if player0 and grid:
 		player0.target = P0_TARGET_COORDS
 		player0.spawn_tile = _find_walkable_spawn_tile(grid, P0_SPAWN_COORDS)
-		
-	# Setup placement overlay with Grid reference
-	if is_instance_valid(placement_overlay) and is_instance_valid(grid):
-		placement_overlay.set_grid(grid)
-		
 		if player0.spawn_tile:
-			player0.calculate_flow(grid) # Trigger P0 flow calculation
+			player0.calculate_flow(grid) 
 		
 	if player1 and grid:
 		player1.target = P1_TARGET_COORDS
 		player1.spawn_tile = _find_walkable_spawn_tile(grid, P1_SPAWN_COORDS)
 		if player1.spawn_tile:
-			player1.calculate_flow(grid) # Trigger P1 flow calculation
+			player1.calculate_flow(grid)
 	
 	# Task 5: Spawn initial bases for each player
 	for player in players:
@@ -217,8 +206,8 @@ func _ready() -> void:
 		structure_placer.set_human_player(human_player)
 		
 	# Setup StructurePlacer with necessary references
-	if is_instance_valid(structure_placer) and is_instance_valid(grid) and is_instance_valid(placement_overlay):
-		structure_placer.setup(grid, placement_overlay)
+	if is_instance_valid(structure_placer) and is_instance_valid(grid):
+		structure_placer.setup(grid)
 
 	# UI Setup for the human player
 	if is_instance_valid(human_player) and is_instance_valid(canvas_layer):
@@ -255,16 +244,16 @@ func _on_structure_selected(structure_type: String):
 	"""
 	Initiates structure placement mode for the human player.
 	"""
-
+	
 	if is_instance_valid(structure_placer):
 		structure_placer.enter_placement_mode(structure_type)
 		print("Game: Entered placement mode for %s." % structure_type)
 	else:
 		push_error("Game._on_structure_selected: StructurePlacer node is not set up.")
 
-func _on_hex_clicked(tile: Tile):
+func _on_hex_clicked(tile: Tile, button_index: int):
 	"""
-	Handles a click on a hexagonal tile, primarily for structure placement confirmation and selection.
+	Handles a click on a hexagonal tile, primarily for structure placement confirmation, right-click cancellation, and selection.
 	"""
 	if not is_instance_valid(tile):
 		return
@@ -273,16 +262,26 @@ func _on_hex_clicked(tile: Tile):
 	var human_player = _get_human_player()
 
 	if is_instance_valid(structure_placer) and structure_placer.is_active():
-		# --- A. Structure Placement ---
-		var success = structure_placer.attempt_placement(tile, map_node)
+		# --- A. Right Click: Exit Placement Mode ---
+		if button_index == MOUSE_BUTTON_RIGHT:
+			structure_placer.exit_placement_mode()
+			print("Game: Placement mode cancelled via right-click.")
+			return
+			
+		# --- B. Left Click: Structure Placement Confirmation ---
+		if button_index == MOUSE_BUTTON_LEFT:
+			var success = structure_placer.attempt_placement(tile, map_node)
+			
+			if success:
+				print("Game: Structure placed successfully at %s." % coords)
+			
+			# Always consume the click event if placement mode is active
+			return
 		
-		if success:
-			print("Game: Structure placed successfully at %s." % coords)
-		
-		# Always consume the click event if placement mode is active
+		# Consume input if placement mode is active regardless of button index (unless handled)
 		return
 
-	# --- B. Structure Selection (if placement mode is inactive) ---
+	# --- C. Structure Selection (if placement mode is inactive) ---
 	if is_instance_valid(human_player):
 		var clicked_structure: Structure = human_player.get_structure_at_coords(coords)
 		
@@ -307,7 +306,7 @@ func _on_hex_clicked(tile: Tile):
 		
 	# Allow RTSCamera to handle the click (e.g., unit movement/selection).
 	pass
-
+	
 
 # Adds the raycast logic for mouse hover detection (Task 2 refactoring)
 func _get_hovered_tile() -> Tile:
@@ -343,8 +342,8 @@ func _get_hovered_tile() -> Tile:
 					tile_node = current_node
 					break
 			
-			# Optimization: Stop searching if we hit the top-level map node
-			if current_node == map_node:
+			# Optimization: Stop searching if we hit the top-level scene/map node
+			if current_node.get_parent() is not Node: # Check if parent is null or not a regular node
 				break
 				
 			current_node = current_node.get_parent()
@@ -433,7 +432,7 @@ func _on_visualization_timer_timeout():
 	if not current_flow:
 		push_error("Game: Flow field for Player %d is not initialized" % current_visualization_player)
 		return
-	
+		
 	# Check if a visualizer is registered. We currently only support one visualizer.
 	if player_visualizers.is_empty() or player_visualizers[0] == null:
 		return

@@ -516,7 +516,7 @@ func _move_to_next_tile():
 	# 3. Set the formation position: X/Z from calculation, Y from ground height + half unit height.
 	formation_position = Vector3(
 		target_xz_pos.x,
-		ground_y + get_unit_height() / 2.0,
+		ground_y,
 		target_xz_pos.z
 	)
 	# 5. We successfully claimed a slot and there are no adjacent enemies in range (checked in step 3).

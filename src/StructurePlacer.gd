@@ -5,14 +5,18 @@ const GameData = preload("res://data/game_data.gd")
 const Tile = preload("res://src/core/Tile.gd")
 const Player = preload("res://src/Player.gd")
 const Grid = preload("res://src/core/Grid.gd")
-const PlacementOverlay = preload("res://src/PlacementOverlay.gd") # Added for type hinting
+
+# Constants for placement overlay colors (Now used for global map tinting on entry/exit)
+const TINT_COLOR_VALID: Color = Color(0.0, 1.0, 0.0, 0.4) # Green, semi-transparent
+const TINT_COLOR_INVALID: Color = Color(1.0, 0.0, 0.0, 0.4) # Red, semi-transparent
+const TINT_COLOR_RESET: Color = Color(1.0, 1.0, 1.0, 0.0) # Fully transparent for clearing all tints
 
 # State tracking for placement mode
 var active: bool = false
 var current_structure_type: String = ""
 var placing_player: Player = null
 var grid_ref: Grid = null
-var overlay_ref: PlacementOverlay = null
+var reachable_coords: Array[Vector2i] = [] # Stores coordinates whose tiles need tinting for hover logic
 
 # Placeholder for the visual preview node
 var preview_instance = null
@@ -30,15 +34,14 @@ func enter_placement_mode(structure_type: String):
 	
 	var config = GameData.STRUCTURE_TYPES.get(structure_type)
 	
-	# Determine reachable tiles for placement and show overlay
+	# Determine reachable tiles for placement and highlight them
 	# References should be set via setup() in Game._ready()
 	var grid = grid_ref
-	var overlay = overlay_ref
 	
 	# Get Game node reference to access selected_structure
 	var game = get_parent()
 	
-	if is_instance_valid(grid) and is_instance_valid(overlay) and is_instance_valid(game):
+	if is_instance_valid(grid) and is_instance_valid(game):
 		var starting_coords: Vector2i
 		# Use selected structure if available, otherwise use spawn tile (main base)
 		if is_instance_valid(game.selected_structure):
@@ -50,11 +53,20 @@ func enter_placement_mode(structure_type: String):
 			active = false
 			return
 			
-		var reachable_tiles = grid.get_reachable_tiles(starting_coords)
-		overlay.show_reachable(reachable_tiles)
+		reachable_coords = grid.get_reachable_tiles(starting_coords)
+		
+		# --- REQUIREMENT 1: Apply tint to ALL tiles when entering placement mode ---
+		for coords in grid.tiles:
+			var tile: Tile = grid.tiles[coords]
+			if is_instance_valid(tile):
+				# Validity check: buildable if tile meets terrain requirements AND no structure exists.
+				var structure_exists = is_instance_valid(tile.structure)
+				var is_valid_for_placement = tile.is_buildable_terrain() and not structure_exists
+				var tint_color: Color = TINT_COLOR_VALID if is_valid_for_placement else TINT_COLOR_INVALID
+				tile.set_overlay_tint(tint_color)
 	else:
-		if not is_instance_valid(grid) or not is_instance_valid(overlay):
-			push_error("StructurePlacer: Missing Grid or PlacementOverlay reference. Setup likely failed.")
+		if not is_instance_valid(grid):
+			push_error("StructurePlacer: Missing Grid reference. Setup likely failed.")
 		elif not is_instance_valid(game):
 			push_error("StructurePlacer: Missing Game node reference.")
 		
@@ -115,14 +127,20 @@ func enter_placement_mode(structure_type: String):
 	
 	print("StructurePlacer: Entered placement mode for %s (Player %d)" % [structure_type, placing_player.id if placing_player else -1])
 	
+
 func exit_placement_mode():
 	active = false
 	current_structure_type = ""
 	
-	# Clear placement overlay
-	var game = get_parent()
-	if is_instance_valid(game) and is_instance_valid(game.placement_overlay):
-		game.placement_overlay.clear()
+	# --- REQUIREMENT 2: Remove tint from all tiles when exiting placement mode ---
+	if is_instance_valid(grid_ref):
+		for coords in grid_ref.tiles:
+			var tile = grid_ref.tiles.get(coords)
+			if is_instance_valid(tile):
+				# Use TINT_COLOR_RESET to clear global indicator tints applied on entry.
+				tile.set_overlay_tint(TINT_COLOR_RESET)
+	
+	reachable_coords.clear()
 		
 	# Clean up preview mesh
 	if is_instance_valid(preview_instance):
@@ -141,7 +159,7 @@ func update_preview(hovered_tile: Tile):
 		return
 
 	# Dynamically fetch map node from parent (Game) for map_node.get_height_at_world_pos
-	# NOTE: grid_ref and overlay_ref are set via setup()
+	# NOTE: grid_ref is set via setup()
 	var game_node = get_parent()
 	if not is_instance_valid(game_node) or not is_instance_valid(game_node.map_node):
 		push_error("StructurePlacer: Cannot find Map node reference on parent Game node.")
@@ -177,9 +195,6 @@ func update_preview(hovered_tile: Tile):
 	# 3. Validate placement
 	var is_valid: bool = true
 	
-	# NOTE: We skip range/reachability check here since PlacementOverlay already handled it
-	# by only showing valid tiles (for simplicity and performance).
-	
 	# Check tile buildable terrain
 	if not hovered_tile.is_buildable_terrain():
 		is_valid = false
@@ -198,22 +213,20 @@ func update_preview(hovered_tile: Tile):
 	if is_valid and not player.can_afford(current_structure_type):
 		is_valid = false
 
-	# 4. Update preview color based on validation
-	var color: Color
+	# 4. Update tile tint based on validation (This handles hover feedback)
+	var tint_color: Color
 	if is_valid:
-		color = Color(0.0, 1.0, 0.0, 0.5) # Green, semi-transparent
+		tint_color = TINT_COLOR_VALID
 	else:
-		color = Color(1.0, 0.0, 0.0, 0.5) # Red, semi-transparent
+		tint_color = TINT_COLOR_INVALID
 		
-	if is_instance_valid(preview_instance.material_override) and preview_instance.material_override is StandardMaterial3D:
-		preview_instance.material_override.albedo_color = color
+	# Removed: hovered_tile.set_overlay_tint(tint_color)
 	
 
 # New method to initialize core references
-func setup(grid: Grid, overlay: PlacementOverlay):
+func setup(grid: Grid):
 	grid_ref = grid
-	overlay_ref = overlay
-	print("StructurePlacer: Grid and PlacementOverlay references set.")
+	print("StructurePlacer: Grid reference set.")
 
 # New method to initialize the human player reference
 func set_human_player(player_ref: Player):
@@ -243,11 +256,13 @@ func attempt_placement(tile: Tile, map_node: Node3D) -> bool:
 	if placing_player.resources < cost:
 		print("StructurePlacer: Not enough resources to build %s (Requires %f, Have %f)." % [current_structure_type, cost, placing_player.resources])
 		return false
-
+	
 	# Place the structure (Player.gd handles resource deduction and adding to map)
 	var success = placing_player.place_structure(current_structure_type, tile, map_node)
 	
-	# Exit placement mode only if placement was successful? No, usually not. 
-	# We let the Game node decide when to exit placement mode (e.g., if we want auto-exit or sustained placement).
-	
+	# Important: Clear tint for the tile that was just placed on, as placement might change validity state instantly.
+	if success and is_instance_valid(tile):
+		tile.set_overlay_tint(TINT_COLOR_RESET)
+		
+	# Exit placement mode usually handled by Game._process after this call returns.
 	return success

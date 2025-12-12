@@ -59,8 +59,11 @@ func _init(structure_config: Dictionary, p_player_id: int, p_current_tile: Tile,
 	_setup_health_bar()
 	
 	# Setup specific functionalities
-	if structure_type == "resource_generator":
-		resource_generation_rate = config.get("resource_generation_rate", 0.0)
+	
+	# Setup specific functionalities
+	
+	resource_generation_rate = config.get("resource_generation_rate", 0.0)
+	if resource_generation_rate > 0.0:
 		_setup_resource_timer()
 	
 	if structure_type == "unit_producer":
@@ -256,4 +259,4 @@ func _correct_height():
 	# Assumes map_node (Map.gd) has get_height_at_world_pos
 	var ground_y = map_node.get_height_at_world_pos(position)
 	var structure_half_height = get_structure_height() / 2.0
-	position.y = ground_y + structure_half_height
+	position.y = ground_y

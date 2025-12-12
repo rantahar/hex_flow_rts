@@ -1,0 +1,370 @@
+# Project Status Document
+
+# 1. Project Overview
+
+- **Vision**: Flow-based RTS where hundreds of autonomous units naturally form frontlines and flank based on density. Player manages flow, not individual units.
+- **Tech Stack**: Godot 4.3, GDScript, Forward+ Renderer, Native deployment (Linux/Windows)
+- **Development Approach**:
+    - Roo Code + Gemini 2.5 Flash for implementation
+    - Claude for planning, architecture, project management
+    - This Claude Project for documentation and status tracking
+
+# 2. Current Phase Status
+
+- **Phase 1 (Engine Core)**: COMPLETE
+- **Phase 2 (Logic Core)**: COMPLETE
+- **Phase 3 (Unit Movement)**: COMPLETE
+- **Phase 4 (Combat System)**: COMPLETE
+- **Phase 5 (Economy & Structures)**: IN PROGRESS
+
+# 3. Completed Systems
+
+## 3.1. Map Generation (Phase 1)
+
+- Hexagonal grid procedural generation using Odd-R offset coordinates
+- Physics-based tile interaction via `StaticBody3D` with trimesh collision
+- Support for multiple tile types (grass, dirt, stone, water)
+- Kenney assets with 0.577 scaling factor
+- `MapGenerator.gd` creates visual mesh instances
+- `Grid.gd` maintains logical tile data structure
+
+## 3.2. Camera System (Phase 1)
+
+- RTS camera with pan (WASD/arrows), edge scrolling, middle-click drag
+- Mouse wheel zoom with height clamping (1-50 units)
+- Raycast-based tile selection using `PhysicsRayQueryParameters3D`
+- Emits `hex_clicked` signal with `Tile` object
+- Click detection works across multiple tile heights
+
+## 3.3. Grid System (Phase 2)
+
+- `Tile` class with grid coordinates, world position, walkability, cost
+- Neighbor connectivity using Odd-R offset calculations
+- Node-to-coordinate reverse lookup for raycast results
+- Coordinate validation and bounds checking
+- Central storage for hex geometry constants (`HEX_SCALE`, `X_SPACING`, `Z_SPACING`)
+
+## 3.4. Flow Field System (Phase 2)
+
+- Dijkstra-based flow field calculation for pathfinding
+- Multi-source target support with priority costs
+- Stores flow data separately from Tiles (supports multiple players)
+- Per-player flow field instances
+- Query interface: `get_flow_cost()`, `get_flow_direction()`
+
+## 3.5. Player System (Phase 2)
+
+- `Player` class owns units array, flow field, resources, target
+- Unit spawning with correct hex-to-world coordinate conversion
+- Flow field calculation triggered by player
+- Support for multiple players with separate flow fields
+
+## 3.6. Unit System (Phase 3)
+
+- `Unit` class with proper constructor initialization
+- MagicaVoxel mesh rendering with hex scaling
+- Positioned via hex coordinates with Odd-R offset
+- Flow field-based pathfinding implementation
+- Periodic movement checks (0.5s timer for idle units)
+- Formation slot claiming and release system
+- Multi-tile movement with proper tile transitions
+- Combat detection and movement stopping
+- Health system with 3D health bars
+- Attack system with cooldown and ranged targeting
+- Dynamic height correction via raycasting
+- Smooth rotation to face movement direction
+- Unit death and cleanup handling
+- Muzzle flash visual effects using `OmniLight3D`
+
+## 3.7. Combat System (Phase 4)
+
+- Range-based enemy detection (`attack_range` from `game_data`)
+- Closest enemy targeting with distance calculations
+- Combat engagement prevents movement
+- In-combat flag for density cost calculations
+- Muzzle flash effects on attack
+- Tested with 250+ units in active combat
+- Flanking behavior via density-based flow costs
+- Multi-unit combat scenarios validated
+
+## 3.8. Performance Characteristics
+
+- Successfully tested with 250+ units at stable framerates
+- Automatic unit spawning system (1 unit per second per player)
+- No time-slicing required at current scale
+- Game clock tracking (MM:SS format)
+- Periodic flow field recalculation (2s intervals)
+- Unit count tracking and reporting
+- Range-based combat detection scales well
+
+## 3.9. Debug Visualization
+
+- Flow field arrow visualization with color gradients
+- Per-player color schemes (P0: green/yellow/red, P1: blue/cyan/magenta)
+- Automatic cycling between player flow fields every 2 seconds
+- Click marker shows selected tile center
+- Both systems marked as temporary debug code
+
+# 4. Architecture Quality
+
+## 4.1. Design Principles Achieved
+
+- **Single Responsibility**: Each class has clear, focused purpose
+- **Signal Down, Call Up**: Proper Godot hierarchy (siblings signal, children called)
+- **Data-Driven**: Tile properties, flow fields, unit stats stored in `game_data.gd`
+- **Modular**: Clean interfaces, minimal coupling between systems
+- **Validated**: Error handling with descriptive messages throughout
+
+## 4.2. Key Architectural Decisions
+
+- Flow fields stored separately from Tiles (multiplayer support)
+- Players own their flow fields and units
+- Grid owns hex geometry constants (single source of truth)
+- `Game.gd` coordinates high-level systems
+- `map.gd` minimal coordinator for map generation only
+- Forward+ renderer (abandoned web deployment for performance)
+- All game configuration centralized in `data/game_data.gd`
+
+## 4.3. Technical Debt Resolved
+
+- Merged duplicate `Player` classes
+- Moved game logic from `map.gd` to `Game.gd`
+- Simplified `FlowFieldVisualizer` to single-method interface
+- Fixed `Unit` initialization to use proper constructor
+- Consolidated duplicate hex constants into `Grid.gd`
+- Added validation and error handling throughout
+- Fixed click system to emit `Tile` objects
+- Centralized all unit stats in `game_data.gd`
+
+# 5. File Structure
+
+## 5.1. Core Systems
+
+```
+src/core/
+├── Grid.gd          - Logical grid, neighbor mapping, hex constants
+├── Tile.gd          - Tile data (coords, world_pos, walkable, cost, neighbors)
+├── FlowField.gd     - Flow field calculation and queries
+├── MapGenerator.gd  - Visual hex grid generation
+├── map.gd           - Map coordinator (minimal)
+├── Structure.gd     - Structure entity with mesh, health, production
+└── Unit.gd          - Unit entity with mesh rendering, combat, movement
+```
+
+## 5.2. Game Systems
+
+```
+src/
+├── Game.gd                 - Main game coordinator, player management
+├── Player.gd               - Player entity with units, structures, flow field
+├── AIPlayer.gd             - AI player with automatic decision making
+├── RTSCamera.gd            - Camera control and tile selection
+├── FlowFieldVisualizer.gd  - Debug: Flow field arrow rendering
+├── HealthBar3D.gd          - 3D health bar rendering
+├── ResourceDisplay.gd      - UI: Resource counter
+├── BuildMenu.gd            - UI: Structure building buttons
+└── StructurePlacer.gd      - Structure placement preview and validation
+```
+
+## 5.3. Data Configuration
+
+```
+data/
+├── game_data.gd            - Centralized game configuration
+│   ├── UNIT_TYPES          - Unit definitions (infantry, tank, scout)
+│   ├── STRUCTURE_TYPES     - Structure definitions (base, drone_factory)
+│   ├── TILES               - Tile type definitions
+│   ├── PLAYER_CONFIGS      - Player setup
+│   └── Map constants
+└── game_config.gd          - Gameplay tuning constants
+```
+
+## 5.4. Scene Structure
+
+```
+game.tscn
+├── Game (Node3D)
+│   ├── Camera3D (RTSCamera.gd)
+│   ├── Map (map.gd)
+│   │   ├── Grid (Grid.gd)
+│   │   ├── MapGenerator (MapGenerator.gd)
+│   │   └── FlowVisualizer (FlowFieldVisualizer.gd)
+│   ├── StructurePlacer (StructurePlacer.gd)
+│   ├── CanvasLayer
+│   │   ├── ResourceDisplay
+│   │   └── BuildMenu
+│   ├── Player0 (Player.gd) - added at runtime
+│   └── Player1 (AIPlayer.gd) - added at runtime
+```
+
+# 6. Next Development Steps
+
+## 6.1. Phase 5: Economy & Structures (Current)
+
+- **Goal**: Strategic resource-based gameplay with buildings. See `economy_plan` document for detailed design.
+- **Summary**: Passive income from bases, improvements adjacent to bases, forward structures for military advantage, builder units for construction, rate sliders for production control.
+
+## 6.2. Phase 6: User Interface & Control (Future)
+
+- Player controls for structure placement
+- Resource display UI
+- Production queue interface
+- Upgrade menu
+- Minimap
+- Game state indicators (win/loss)
+
+## 6.3. Phase 7: Victory Conditions & Game Loop (Future)
+
+- Win conditions (destroy enemy base, control territory, etc.)
+- Lose conditions (all structures destroyed, etc.)
+- Game over screen
+- Restart/new game functionality
+- Save/load system
+
+# 7. Known Issues and Limitations
+
+## 7.1. Current Limitations
+
+- Debug visualization runs continuously (no toggle)
+- Hardcoded 2-player setup for testing
+- Economy system partially implemented
+- No builder units yet
+- No forward structures yet
+- Single unit type (infantry) actively spawning
+- Fixed spawn rate (1 unit/second/player)
+- Limited UI (resource display and build menu only)
+- No save/load system
+- No victory conditions
+
+## 7.2. Performance Status
+
+- **Target**: 500+ units at native framerate
+- **Tested**: 250+ units stable performance
+- **Strategy**: No time-slicing needed at current scale
+- **Current**: Godot handles physics and rendering efficiently
+- Combat range detection scales well
+- **Note**: Performance headroom available for structures and additional features
+
+# 8. Testing Status
+
+## 8.1. Manual Testing Completed
+
+- Tile click detection at multiple heights
+- Flow field calculation for both players
+- Flow field visualization cycling
+- Unit spawning at correct coordinates
+- Camera controls (pan, zoom, edge scroll, drag)
+- Unit movement along flow fields
+- Formation slot claiming and positioning
+- Combat detection and engagement
+- Unit death and cleanup
+- Multi-unit pathfinding (250+ units)
+- Height correction on uneven terrain
+- Attack system with cooldown
+- Health bar display and updates
+- Ranged combat (`attack_range` parameter)
+- Muzzle flash visual effects
+- Flanking behavior with density costs
+- Large-scale combat scenarios
+- Structure placement with preview
+- Resource display updates
+- Basic AI player behavior
+
+## 8.2. Edge Cases Validated
+
+- Invalid coordinate handling with error messages
+- Null reference checks throughout
+- Water tiles marked unwalkable with `INF` cost
+- Odd-R offset calculations for odd/even rows
+- Full formation slot handling
+- Enemy detection across tile boundaries
+- Unit cleanup on death (slot release, array removal)
+- Range-based targeting with multiple enemies
+- Combat state transitions
+
+## 8.3. Performance Testing
+
+- Stable performance with 250+ active units
+- Automatic spawning system functional
+- Flow field recalculation under load (2s intervals)
+- Physics processing scales well
+- No time-slicing required at current scale
+- Range-based combat detection performance validated
+
+# 9. Key Technical Details Reference
+
+## 9.1. Hex Grid Math (Odd-R Offset, Pointy-Top)
+
+- `HEX_SCALE = 0.6`
+- `X_SPACING = 1.732 × 0.57735 ≈ 1.0`
+- `Z_SPACING = 1.5 × 0.57735 ≈ 0.866`
+- Odd rows: offset by `X_SPACING/2`
+
+## 9.2. Node Structure Pattern
+
+```
+StaticBody3D (Hex_x_z) - collision and identification
+└── MeshInstance3D - visual mesh with trimesh collision
+```
+
+## 9.3. Flow Field Data Structure
+
+```
+flow_data: {
+    Vector2i(x,z): {
+        cost: float,
+        direction: Vector2i
+    }
+}
+```
+
+## 9.4. Game Data Structure Pattern
+
+All configurable game content follows this pattern in `data/game_data.gd`:
+
+```gdscript
+const ENTITY_TYPES = {
+    "entity_name": {
+        "display_name": "Human Readable Name",
+        "mesh_path": "res://path/to/mesh.obj",
+        "property1": value1,
+        "property2": value2,
+        ...
+    }
+}
+```
+
+Applied to: `UNIT_TYPES`, `STRUCTURE_TYPES`, `TILES`
+
+# 10. Development Workflow
+
+## 10.1. Making Changes
+
+1. Discuss architecture/approach with Claude
+2. Get Roo Code prompt from Claude
+3. Implement with Roo Code + Gemini 2.5 Flash
+4. Test in Godot
+5. Update status document
+
+## 10.2. Asking Claude for Help
+
+Always provide:
+
+- Current file contents if relevant
+- Specific Godot version (4.3)
+- Error messages if debugging
+- Expected vs actual behavior
+
+Claude provides:
+
+- Architecture guidance
+- Roo Code prompts (concise, action-oriented)
+- Project planning and status tracking
+
+## 10.3. Data-Driven Development Pattern
+
+- All new game content starts in `game_data.gd`
+- Define entity types with all properties as dictionaries
+- Create generic classes that read from config dictionaries
+- Use type strings to differentiate behavior when needed
+- Keep game logic separate from data definitions

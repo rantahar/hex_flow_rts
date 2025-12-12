@@ -1,0 +1,22 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://bvvch5goixgt4"
+path="res://.godot/imported/robot.obj-d22ca7007ac7b04cc40c75f353ebbc24.mesh"
+
+[deps]
+
+files=["res://.godot/imported/robot.obj-d22ca7007ac7b04cc40c75f353ebbc24.mesh"]
+
+source_file="res://assets/robot.obj"
+dest_files=["res://.godot/imported/robot.obj-d22ca7007ac7b04cc40c75f353ebbc24.mesh", "res://.godot/imported/robot.obj-d22ca7007ac7b04cc40c75f353ebbc24.mesh"]
+
+[params]
+
+generate_tangents=true
+scale_mesh=Vector3(1, 1, 1)
+offset_mesh=Vector3(0, 0, 0)
+optimize_mesh=true
+force_disable_mesh_compression=false

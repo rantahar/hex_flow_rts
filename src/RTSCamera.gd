@@ -1,8 +1,8 @@
 extends Camera3D
-
+ 
 # Signals
-signal hex_clicked(tile: Tile)
-
+signal hex_clicked(tile: Tile, button_index: int)
+ 
 # Dependencies
 @export var grid_registry: Grid
 
@@ -12,12 +12,12 @@ const EDGE_THRESHOLD = 20.0
 const ZOOM_SPEED = 0.5
 const ZOOM_MIN = 1.0
 const ZOOM_MAX = 50.0
-
+ 
 # State variables
 var is_middle_mouse_down: bool = false
 var last_mouse_position: Vector2 = Vector2.ZERO
 var map_bounds: Dictionary = {}
-
+ 
 func _ready():
 	"""
 	Called when the node enters the scene tree for the first time.
@@ -64,7 +64,7 @@ func _input(event):
 	# Zoom Handling
 	_handle_zoom(event)
 
-	# Left Click Raycasting
+	# Left/Right Click Raycasting
 	_handle_raycast_click(event)
 
 func _handle_movement(delta: float):
@@ -203,13 +203,13 @@ func _clamp_position():
 
 func _handle_raycast_click(event):
 	"""
-	Handles a left mouse button press by performing a raycast from the camera through the mouse position.
+	Handles mouse button presses (left and right) by performing a raycast from the camera through the mouse position.
 	If the raycast hits a tile body, it finds the associated Tile data object and emits the `hex_clicked` signal.
 
 	Arguments:
 	- event (InputEvent): The incoming input event.
 	"""
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+	if event is InputEventMouseButton and (event.button_index == MOUSE_BUTTON_LEFT or event.button_index == MOUSE_BUTTON_RIGHT) and event.pressed:
 		
 		if not is_instance_valid(grid_registry):
 			push_error("Grid registry not available in RTSCamera.gd")
@@ -262,5 +262,5 @@ func _handle_raycast_click(event):
 				var tile = grid_registry.tiles.get(tile_coords)
 				
 				if tile:
-					# Emit signal with the Tile object
-					emit_signal("hex_clicked", tile)
+					# Emit signal with the Tile object and button pressed
+					emit_signal("hex_clicked", tile, event.button_index)

@@ -7,7 +7,7 @@ const UNIT_TYPES = {
 		# User-friendly name for display
 		"display_name": "Infantry",
 		# Path to the unit's 3D mesh file (.obj, .glb, etc.)
-		"mesh_path": "res://assets/robot_simple.obj",
+		"mesh_path": "res://assets/robot.obj",
 		# Movement speed in units per second
 		"move_speed": 0.5,
 		# Radius for collision and selection, measured in hex units
@@ -68,12 +68,12 @@ const UNIT_TYPES = {
 const STRUCTURE_TYPES = {
 	"base": {
 		"display_name": "Base",
-		"mesh_path": "res://assets/robot_simple.obj",
+		"mesh_path": "res://assets/base.obj",
 		"size": 0.3,
 		"cost": 500,
 		"buildable": true,
 		"max_health": 1000,
-		"income_rate": 10,
+		"resource_generation_rate": 10,
 		"self_repair_rate": 1,
 		"min_spacing": 5,
 		"category": "base"
@@ -99,7 +99,7 @@ const STRUCTURE_TYPES = {
 		"size": 0.3,
 		"cost": 100,
 		"max_health": 150,
-		"income_bonus": 5,
+		"resource_generation_rate": 5,
 		"category": "improvement"
 	},
 	
