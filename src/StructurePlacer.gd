@@ -186,11 +186,14 @@ func update_preview(hovered_tile: Tile):
 		return
 	
 	var scale_factor = preview_instance.scale.y # Scale is uniform
-	var mesh_height = mesh.get_aabb().size.y
-	var structure_half_height = mesh_height * scale_factor / 2.0
+	var structure_height = mesh.get_aabb().size.y * scale_factor
 	
-	# Adjust Y position: ground_y + (mesh_height * scale_factor / 2.0)
-	preview_instance.global_position = Vector3(hovered_tile.world_pos.x, ground_y + structure_half_height, hovered_tile.world_pos.z)
+	# Get vertical offset configuration (0.0 for standard placement, negative to sink)
+	var y_offset_fraction = structure_config.get("y_offset_fraction", 0.0)
+	
+	# Adjust Y position using generalized placement: ground_y + (structure_height * offset_fraction)
+	# This aligns with the placement logic in Structure.gd
+	preview_instance.global_position = Vector3(hovered_tile.world_pos.x, ground_y + (structure_height * y_offset_fraction), hovered_tile.world_pos.z)
 	
 	# 3. Validate placement
 	var is_valid: bool = true
@@ -264,5 +267,10 @@ func attempt_placement(tile: Tile, map_node: Node3D) -> bool:
 	if success and is_instance_valid(tile):
 		tile.set_overlay_tint(TINT_COLOR_RESET)
 		
+		# Check if the tile needs to be hidden beneath the structure
+		var hide_tile = structure_config.get("hide_tile", false)
+		if hide_tile:
+			tile.set_visible(false)
+			
 	# Exit placement mode usually handled by Game._process after this call returns.
 	return success

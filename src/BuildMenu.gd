@@ -22,16 +22,16 @@ func _ready():
 	# 2. Generate buttons
 	for key in GameData.STRUCTURE_TYPES:
 		var config = GameData.STRUCTURE_TYPES[key]
-		if config.get("buildable", false):
-			# Store config for easy lookup
-			buildable_structures[key] = config
-			
-			var button = Button.new()
-			button.mouse_filter = Control.MOUSE_FILTER_STOP
-			var cost = config.get("cost", 0)
-			button.text = "%s (%d)" % [config.display_name, cost]
-			button.pressed.connect(_on_build_button_pressed.bind(key))
-			add_child(button)
+		# Store config for easy lookup (All structures are now displayed)
+		buildable_structures[key] = config
+		
+		var button = Button.new()
+		button.mouse_filter = Control.MOUSE_FILTER_STOP
+		button.name = key # Set button name to structure key for resource check lookup
+		var cost = config.get("cost", 0)
+		button.text = "%s (%d)" % [config.display_name, cost]
+		button.pressed.connect(_on_build_button_pressed.bind(key))
+		add_child(button)
 
 func setup(p_player: Player):
 	"""

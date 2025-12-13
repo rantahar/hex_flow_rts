@@ -217,10 +217,15 @@ func take_damage(amount: float):
 			var player: Player = game_node.get_player(player_id)
 			if player and player.structures.has(self):
 				# Remove self from Player.structures array (assuming Player.gd has this array)
-				player.structures.erase(self) 
+				player.structures.erase(self)
 				
 		# 2. Release current_tile.structure reference
 		if current_tile and current_tile.structure == self:
+			
+			# Restore tile visibility if it was hidden by this structure
+			if config.get("hide_tile", false):
+				current_tile.set_visible(true)
+				
 			current_tile.structure = null
 			
 		# 3. Remove from scene
@@ -258,5 +263,11 @@ func _correct_height():
 	var map_node = get_parent()
 	# Assumes map_node (Map.gd) has get_height_at_world_pos
 	var ground_y = map_node.get_height_at_world_pos(position)
-	var structure_half_height = get_structure_height() / 2.0
-	position.y = ground_y
+	var structure_height = get_structure_height()
+	
+	# Get vertical offset configuration (0.0 for resting on ground, negative to sink)
+	var y_offset_fraction = config.get("y_offset_fraction", 0.0)
+	
+	# Calculate final Y position: Ground Y + Half Height (to center on ground) + Total height * Offset fraction
+	# If y_offset_fraction is -0.5, position.y = ground_y (sinks structure center to ground level, halfway down)
+	position.y = ground_y + (structure_height * y_offset_fraction)

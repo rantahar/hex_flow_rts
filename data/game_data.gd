@@ -11,7 +11,7 @@ const UNIT_TYPES = {
 		# Movement speed in units per second
 		"move_speed": 0.5,
 		# Radius for collision and selection, measured in hex units
-		"size": 0.1,
+		"size": 0.08,
 		# Number of formation slots this unit occupies
 		"formation_size": 1,
 		# Maximum health points
@@ -76,12 +76,13 @@ const STRUCTURE_TYPES = {
 		"resource_generation_rate": 10,
 		"self_repair_rate": 1,
 		"min_spacing": 5,
-		"category": "base"
+		"category": "base",
+		"y_offset_fraction": 0.0
 	},
 	
 	"drone_factory": {
 		"display_name": "Drone Factory",
-		"mesh_path": "res://assets/robot_simple.obj",
+		"mesh_path": "res://assets/factory.obj",
 		"size": 0.2,
 		"buildable": true,
 		"cost": 150,
@@ -90,17 +91,20 @@ const STRUCTURE_TYPES = {
 		"produces_unit_type": "infantry",
 		"production_time": 5.0,
 		"production_rate_max": 1.0,
-		"category": "improvement"
+		"category": "improvement",
+		"y_offset_fraction": 0.0
 	},
 	
-	"income_upgrade": {
-		"display_name": "Income Upgrade",
-		"mesh_path": "res://assets/robot_simple.obj",
-		"size": 0.3,
+	"mine": {
+		"display_name": "Mine",
+		"mesh_path": "res://assets/mine.obj",
+		"hide_tile": true,
+		"size": 0.58,
 		"cost": 100,
 		"max_health": 150,
 		"resource_generation_rate": 5,
-		"category": "improvement"
+		"category": "improvement",
+		"y_offset_fraction": -0.8 # Sink the mine halfway into the tile
 	},
 	
 	"cannon": {
@@ -112,7 +116,8 @@ const STRUCTURE_TYPES = {
 		"attack_damage": 25,
 		"attack_range": 4,
 		"attack_cooldown": 1.5,
-		"category": "improvement"
+		"category": "improvement",
+		"y_offset_fraction": 0.0
 	},
 	
 	"transport_hub": {
@@ -123,7 +128,8 @@ const STRUCTURE_TYPES = {
 		"max_health": 100,
 		"speed_multiplier": 1.5,
 		"effect_radius": 6,
-		"category": "forward"
+		"category": "forward",
+		"y_offset_fraction": 0.0
 	},
 	
 	"artillery": {
@@ -136,7 +142,8 @@ const STRUCTURE_TYPES = {
 		"attack_range": 8,
 		"attack_cooldown": 3.0,
 		"aoe_radius": 2,
-		"category": "forward"
+		"category": "forward",
+		"y_offset_fraction": 0.0
 	},
 }
 

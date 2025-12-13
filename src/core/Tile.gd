@@ -159,6 +159,13 @@ func set_overlay_tint(color: Color):
 	
 	push_warning("Tile (%d, %d): Could not find MeshInstance3D child on node to apply tint." % [x, z])
 
+func set_visible(is_visible: bool):
+	"""
+	Sets the visibility of the tile's primary node.
+	"""
+	if is_instance_valid(node):
+		node.visible = is_visible
+
 # Calculates the flow field cost for a unit of player_id attempting to move onto this tile.
 func get_flow_cost(player_id: int) -> float:
 	"""

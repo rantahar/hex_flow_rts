@@ -241,10 +241,7 @@ func place_structure(structure_key: String, target_tile: Tile, map_node: Node3D)
 	
 	var structure_config = GameData.STRUCTURE_TYPES[structure_key]
 	
-	# 1. Check if structure is buildable (we allow non-buildable structures like 'base' to be placed if cost is 0)
-	if structure_config.get("cost", 0.0) > 0 and not structure_config.get("buildable", true):
-		push_error("Player %d.place_structure: Structure '%s' is not buildable by normal means." % [id, structure_key])
-		return false
+	# 1. All structures selected via the Build Menu are now considered buildable (Removed check for "buildable" flag).
 		
 	# 2. Check if target_tile is suitable for building (terrain)
 	if not target_tile.is_buildable_terrain():
