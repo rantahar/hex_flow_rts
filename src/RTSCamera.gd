@@ -238,14 +238,14 @@ func _handle_raycast_click(event):
 			var collider = result.collider
 			var position = result.position
 			
-			# We need to find the registered StaticBody3D ancestor.
+			# We need to find the registered Tile ancestor.
 			var current_node: Node = collider
-			var tile_node: StaticBody3D = null
+			var tile_node: Tile = null # Changed type hint
 			var tile_coords: Vector2i = Vector2i(-1, -1)
 			
 			# Traverse up the tree until a registered node is found or we reach the root of the map generation.
 			while current_node:
-				if current_node is StaticBody3D:
+				if current_node is Tile: # Check for Tile class instead of StaticBody3D
 					tile_coords = grid_registry.find_tile_by_node(current_node)
 					if tile_coords != Vector2i(-1, -1):
 						tile_node = current_node

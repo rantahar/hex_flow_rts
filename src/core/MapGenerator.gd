@@ -3,6 +3,7 @@ extends Node3D
 class_name MapGenerator
 
 const GameData = preload("res://data/game_data.gd")
+const TILE_SCENE = preload("res://src/core/tile.tscn")
 
 
 var map_width: int = GameData.MAP_WIDTH
@@ -40,13 +41,10 @@ func generate_map():
 				
 			var position = Vector3(pos_x, 0, pos_z)
 			
-			# 3. Optimization: Create a StaticBody3D child for the tile
-			var tile_root = StaticBody3D.new()
+			# 3. Instantiate Tile Scene (CSGMesh3D root)
+			var tile_root = TILE_SCENE.instantiate()
 			tile_root.name = "Hex_%d_%d" % [x, z]
 			tile_root.position = position
-			
-			# Instantiate MeshInstance3D
-			var tile_mesh_instance = MeshInstance3D.new()
 			
 			# Mesh: Select random tile type and load resource
 			var selected_tile_key = _get_weighted_random_tile_key()
@@ -61,25 +59,23 @@ func generate_map():
 				push_error("Failed to load Mesh resource: %s. Skipping tile." % tile_def.mesh_path)
 				continue
 				
-			tile_mesh_instance.mesh = selected_mesh
+			# Set mesh on the root node (CSGMesh3D)
+			tile_root.mesh = selected_mesh
 			
 			# Scale: Set node.scale
-			tile_mesh_instance.scale = Vector3.ONE * hex_scale
+			tile_root.scale = Vector3.ONE * hex_scale
 			
-			# Rotation Fix: Set node.rotation_degrees.y = 90 (or similar)
-			tile_mesh_instance.rotation_degrees.y = 0.0
+			# Rotation Fix (Keep for consistency)
+			tile_root.rotation_degrees.y = 0.0
 			
-			# Add visual node to the StaticBody3D
-			tile_root.add_child(tile_mesh_instance)
-			
-			# Add StaticBody3D to the scene tree (parent MapGenerator)
+			# Add to the scene tree (parent MapGenerator)
 			add_child(tile_root)
 			
-			# Add collision shape based on mesh geometry
-			tile_mesh_instance.create_trimesh_collision() # Requirement 1: Trimesh collision
+			# Collision is assumed to be handled by the CSGMesh3D properties in the scene.
 			
 			# Requirement 2: Store tile reference
-			var tile_data = Tile.new()
+			# Since tile_root is a CSGMesh3D with Tile.gd attached, it is the Tile object itself.
+			var tile_data: Tile = tile_root
 			tile_data.x = x
 			tile_data.z = z
 			tile_data.world_pos = position
@@ -87,8 +83,6 @@ func generate_map():
 			# Apply tile data properties
 			tile_data.walkable = tile_def.walkable
 			tile_data.cost = tile_def.walk_cost
-			
-			tile_data.node = tile_root # Use the StaticBody3D (tile_root) as the node reference for lookup
 			
 			var coords = Vector2i(x, z)
 			generated_tiles[coords] = tile_data

@@ -98,8 +98,8 @@ const STRUCTURE_TYPES = {
 	"mine": {
 		"display_name": "Mine",
 		"mesh_path": "res://assets/mine.obj",
-		"hide_tile": true,
-		"size": 0.58,
+		"drill_hole": true,
+		"size": 0.2,
 		"cost": 100,
 		"max_health": 150,
 		"resource_generation_rate": 5,

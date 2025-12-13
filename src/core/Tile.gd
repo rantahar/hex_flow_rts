@@ -1,4 +1,5 @@
 class_name Tile
+extends CSGMesh3D
 
 # Preloads needed for type hinting and access to constants
 const Grid = preload("res://src/core/Grid.gd")
@@ -31,8 +32,6 @@ var z: int
 # World position of the tile center
 var world_pos: Vector3
 
-# The actual Node3D instance representing the tile in the scene tree (StaticBody3D)
-var node: Node3D
 
 # Gameplay properties
 var walkable: bool = true
@@ -40,6 +39,9 @@ var cost: float = 1.0
 
 # Reference to the Structure built on this tile (null if free)
 var structure: Structure = null
+
+# Reference to an optional child node representing a drill hole
+@onready var hole_node: Node3D = $Hole
 
 # A list of neighboring Tile objects, assigned after map generation
 var neighbors: Array[Tile] = []
@@ -138,33 +140,36 @@ func is_flow_target(player_id: int) -> bool:
 func set_overlay_tint(color: Color):
 	"""
 	Sets a tint color override on the tile's primary mesh to indicate selection/hover state.
-	Assumes the ground mesh is the first MeshInstance3D child of the tile's node.
+	Assumes the tile's node (a CSGMesh3D) holds the mesh directly.
 	
 	Arguments:
 	- color (Color): The color to tint the tile with (including alpha).
 	"""
-	if not is_instance_valid(node):
-		push_error("Tile (%d, %d): Node is invalid, cannot set tint." % [x, z])
+	if not is_instance_valid(self):
+		push_error("Tile (%d, %d): Instance is invalid, cannot set tint." % [x, z])
 		return
 		
-	for child in node.get_children():
-		if child is MeshInstance3D:
-			# Use material_overlay to blend on top of existing materials
-			if not is_instance_valid(child.material_overlay):
-				child.material_overlay = StandardMaterial3D.new()
-				child.material_overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-				child.material_overlay.cull_mode = BaseMaterial3D.CULL_DISABLED
-			child.material_overlay.albedo_color = color
-			return # Assuming only one mesh to tint
-	
-	push_warning("Tile (%d, %d): Could not find MeshInstance3D child on node to apply tint." % [x, z])
+	# self is the CSGMesh3D root node
+	# Use material_overlay to blend on top of existing materials
+	if not is_instance_valid(material_overlay):
+		material_overlay = StandardMaterial3D.new()
+		material_overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material_overlay.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material_overlay.albedo_color = color
 
-func set_visible(is_visible: bool):
+func set_tile_visibility(is_visible: bool):
 	"""
-	Sets the visibility of the tile's primary node.
+	Sets the visibility of the tile (the root node).
 	"""
-	if is_instance_valid(node):
-		node.visible = is_visible
+	if is_instance_valid(self):
+		visible = is_visible
+
+func set_hole_visibility(is_visible: bool):
+	"""
+	Sets the visibility of the 'Hole' child node.
+	"""
+	if is_instance_valid(hole_node):
+		hole_node.visible = is_visible
 
 # Calculates the flow field cost for a unit of player_id attempting to move onto this tile.
 func get_flow_cost(player_id: int) -> float:
@@ -215,3 +220,15 @@ func is_buildable_terrain() -> bool:
 	For simplicity, currently requires the tile to be walkable.
 	"""
 	return walkable
+
+func _ready():
+	# Ensure the Hole node is initially hidden and non-pickable,
+	# as it shouldn't interfere with tile clicks/raycasts.
+	if is_instance_valid(hole_node):
+		hole_node.visible = false
+		
+		# Ensure the visual children of the hole node are not pickable,
+		# as the hole node itself may not have the input_ray_pickable property.
+		for child in hole_node.get_children():
+			if child.has_method("set_input_ray_pickable"):
+				child.set_input_ray_pickable(false)

@@ -332,11 +332,11 @@ func _get_hovered_tile() -> Tile:
 		# Traverse up the tree until a registered StaticBody3D tile node is found.
 		# This replicates the robust clicking logic from RTSCamera.gd.
 		var current_node: Node = collider
-		var tile_node: StaticBody3D = null
+		var tile_node: Tile = null # Changed type hint
 		
 		while current_node:
-			# NOTE: Assuming tiles are StaticBody3D and registered in Grid
-			if current_node is StaticBody3D:
+			# NOTE: Assuming tiles are registered in Grid
+			if current_node is Tile: # Check for Tile class instead of StaticBody3D
 				tile_coords = grid.find_tile_by_node(current_node)
 				if tile_coords != Vector2i(-1, -1):
 					tile_node = current_node

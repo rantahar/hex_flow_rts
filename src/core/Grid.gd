@@ -83,9 +83,8 @@ func register_tiles(new_tiles: Dictionary):
 	# Populate reverse lookup
 	connect_neighbors()
 	for coords in tiles:
-		var tile_data: Tile = tiles[coords]
-		var tile_node: Node3D = tile_data.node
-		node_to_coords[tile_node] = coords
+		var tile: Tile = tiles[coords]
+		node_to_coords[tile] = coords
 
 ## Performs a reverse lookup to find the grid coordinates associated with a specific tile node.
 func find_tile_by_node(node: Node3D) -> Vector2i:

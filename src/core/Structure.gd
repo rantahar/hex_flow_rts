@@ -224,7 +224,11 @@ func take_damage(amount: float):
 			
 			# Restore tile visibility if it was hidden by this structure
 			if config.get("hide_tile", false):
-				current_tile.set_visible(true)
+				current_tile.set_tile_visibility(true)
+			
+			# Restore hole visibility if it was drilled by this structure
+			if config.get("drill_hole", false):
+				current_tile.set_hole_visibility(false)
 				
 			current_tile.structure = null
 			

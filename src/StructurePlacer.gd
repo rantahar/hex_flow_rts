@@ -88,24 +88,17 @@ func enter_placement_mode(structure_type: String):
 		return
 		
 	var mesh_load = load(mesh_path)
-	if mesh_load is PackedScene:
-		# If it's a scene, instantiate it and get the first MeshInstance3D child
-		preview_instance = mesh_load.instantiate()
-		# Search for MeshInstance3D child (might be nested)
-		for child in preview_instance.get_children():
-			if child is MeshInstance3D:
-				preview_instance = child
-				break
-	elif mesh_load is Mesh:
-		if not is_instance_valid(preview_instance):
-			preview_instance = MeshInstance3D.new()
-		preview_instance.mesh = mesh_load
 	
-	if not preview_instance:
-		push_error("StructurePlacer: Failed to create preview mesh instance for %s." % structure_type)
+	# Assert that the loaded resource is a Mesh, as structures are not scenes.
+	if not mesh_load is Mesh:
+		push_error("StructurePlacer: Loaded asset is not a Mesh for %s." % structure_type)
 		active = false
 		return
 		
+	if not is_instance_valid(preview_instance):
+		preview_instance = MeshInstance3D.new()
+	preview_instance.mesh = mesh_load
+	
 	# 2. Scale preview instance (same scaling logic as Structure.gd)
 	var target_world_radius = Grid.HEX_SCALE * config.size
 	var aabb = preview_instance.mesh.get_aabb()
@@ -267,10 +260,15 @@ func attempt_placement(tile: Tile, map_node: Node3D) -> bool:
 	if success and is_instance_valid(tile):
 		tile.set_overlay_tint(TINT_COLOR_RESET)
 		
-		# Check if the tile needs to be hidden beneath the structure
+		# Check if a drill hole needs to be made visible
+		var drill_hole = structure_config.get("drill_hole", false)
+		if drill_hole:
+			tile.set_hole_visibility(true)
+			
+		# Legacy check: Check if the tile needs to be hidden beneath the structure
 		var hide_tile = structure_config.get("hide_tile", false)
 		if hide_tile:
-			tile.set_visible(false)
+			tile.set_tile_visibility(false)
 			
 	# Exit placement mode usually handled by Game._process after this call returns.
 	return success
