@@ -15,7 +15,7 @@ var config: Dictionary = {}
 var grid: Grid = null
 
 var display_name: String = ""
-var structure_type: String = "" # e.g., "resource_generator", "unit_producer"
+var structure_type: String = "" # e.g., "base", "mine", "drone_factory"
 var player_id: int = 0
 var size_hex: float = 0.0 # Radius in hex units
 var max_health: float = 0.0
@@ -25,31 +25,32 @@ var current_tile: Tile = null
 
 var mesh_instance: MeshInstance3D
 
-# Resource generation properties (structure_type == "resource_generator")
+# Resource generation properties
 var resource_generation_rate: float = 0.0
 var resource_timer: Timer
 
-# Unit production properties (structure_type == "unit_producer")
+# Unit production properties
 var produces_unit_type: String = ""
 var production_time: float = 0.0
 var production_timer: Timer
 var is_producing: bool = false
 
 
-func _init(structure_config: Dictionary, p_player_id: int, p_current_tile: Tile, world_pos: Vector3):
+
+func _init(structure_config: Dictionary, p_structure_type: String, p_player_id: int, p_current_tile: Tile, world_pos: Vector3):
 	"""
 	Initializes the structure with configuration, player ID, starting tile, and world position.
 	"""
 	config = structure_config
 	player_id = p_player_id
 	current_tile = p_current_tile
-	
+
 	# Initialize core stats from config
 	size_hex = config.get("size", 0.0)
 	max_health = config.get("max_health", 100.0)
 	health = max_health
 	display_name = config.get("display_name", "Structure")
-	structure_type = config.get("structure_type", "")
+	structure_type = p_structure_type
 	
 	# Set position to planar world position for now. Height will be corrected after adding to tree.
 	position = Vector3(world_pos.x, world_pos.y, world_pos.z)
@@ -66,7 +67,8 @@ func _init(structure_config: Dictionary, p_player_id: int, p_current_tile: Tile,
 	if resource_generation_rate > 0.0:
 		_setup_resource_timer()
 	
-	if structure_type == "unit_producer":
+	if config.has("produces_unit_type"):
+		print("Structure %s: Detected unit production capability." % display_name)
 		produces_unit_type = config.get("produces_unit_type", "")
 		production_time = config.get("production_time", 5.0)
 		_setup_production_timer()
@@ -169,7 +171,7 @@ func start_production():
 	"""
 	Sets is_producing to true and starts the production timer.
 	"""
-	if structure_type != "unit_producer" or is_producing:
+	if produces_unit_type == "":
 		return
 
 	if produces_unit_type.is_empty():

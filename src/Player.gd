@@ -200,6 +200,7 @@ func _on_structure_unit_produced(unit_type: String, structure: Structure):
 	Handles the unit production signal from a structure.
 	Spawns the unit on the structure's current tile.
 	"""
+	print("Player %d received unit_produced signal for unit type '%s' from structure at tile %s." % [id, unit_type, structure.current_tile.get_coords()])
 	if not is_instance_valid(structure):
 		push_error("Player %d._on_structure_unit_produced: Invalid structure instance received." % id)
 		return
@@ -265,7 +266,7 @@ func place_structure(structure_key: String, target_tile: Tile, map_node: Node3D)
 	add_resources(-structure_cost)
 	
 	# Create structure instance
-	var structure_instance = Structure.new(structure_config, id, target_tile, target_tile.world_pos)
+	var structure_instance = Structure.new(structure_config, structure_key, id, target_tile, target_tile.world_pos)
 	
 	if not is_instance_valid(map_node):
 		push_error("Player %d.place_structure: Invalid Map node reference." % id)
@@ -283,13 +284,14 @@ func place_structure(structure_key: String, target_tile: Tile, map_node: Node3D)
 	structures_by_coord[target_tile.get_coords()] = structure_instance
 	
 	# Handle unit producers and resource generators that need to start working
-	if structure_instance.structure_type == "unit_producer":
+	if structure_instance.produces_unit_type != "":
+		print("Player %d placed unit-producing structure '%s' at %s. Starting production." % [id, structure_key, target_tile.get_coords()])
 		# Connect unit_produced signal to _on_unit_produced
 		if structure_instance.has_signal("unit_produced"):
 			structure_instance.unit_produced.connect(_on_structure_unit_produced)
 			structure_instance.start_production()
 		else:
-			push_error("Structure type 'unit_producer' lacks required 'unit_produced' signal!")
+			push_error("Structure lacks required 'unit_produced' signal!")
 	# Resource generators start automatically in Structure._ready (via _init setup)
 	
 	print("Player %d successfully placed structure '%s' at %s. Remaining resources: %f" % [id, structure_key, target_tile.get_coords(), resources])

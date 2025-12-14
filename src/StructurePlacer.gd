@@ -31,8 +31,54 @@ func is_active() -> bool:
 func enter_placement_mode(structure_type: String):
 	current_structure_type = structure_type
 	active = true
-	
+
 	var config = GameData.STRUCTURE_TYPES.get(structure_type)
+
+	# Step 1: Detect if this is an improvement structure and print the result
+	var is_improvement = false
+	if config and config.has("category") and config.category == "improvement":
+		is_improvement = true
+	print("[StructurePlacer] Structure type: %s, is_improvement: %s" % [structure_type, str(is_improvement)])
+
+	# Step 2: Find all base tiles owned by the placing player and print their coordinates
+	var base_coords = []
+	var allowed_neighbor_coords = []
+	if is_improvement:
+		if is_instance_valid(grid_ref) and is_instance_valid(placing_player):
+			var neighbor_set = {}
+			for coords in grid_ref.tiles:
+				var tile = grid_ref.tiles[coords]
+				if is_instance_valid(tile) and is_instance_valid(tile.structure):
+					var base_config = GameData.STRUCTURE_TYPES.get(tile.structure.structure_type)
+					if base_config and base_config.has("category") and base_config.category == "base":
+						if tile.structure.player_id == placing_player.id:
+							base_coords.append(coords)
+							# Step 3: Collect all unique neighbor coords
+							for neighbor in tile.neighbors:
+								if is_instance_valid(neighbor):
+									neighbor_set[neighbor.get_coords()] = true
+			# Convert keys to array
+			allowed_neighbor_coords = neighbor_set.keys()
+		print("[StructurePlacer] Base coords for player %s: %s" % [str(placing_player.id) if is_instance_valid(placing_player) else "?", str(base_coords)])
+		print("[StructurePlacer] Allowed improvement neighbor coords: %s" % [str(allowed_neighbor_coords)])
+
+		# Step 4: Only allow placement and highlight green on allowed neighbor tiles
+		for coords in grid_ref.tiles:
+			var tile = grid_ref.tiles[coords]
+			var is_allowed = false
+			if allowed_neighbor_coords.has(coords):
+				is_allowed = tile.is_buildable_terrain() and not is_instance_valid(tile.structure)
+			var tint_color = TINT_COLOR_VALID if is_allowed else TINT_COLOR_INVALID
+			tile.set_overlay_tint(tint_color)
+		return
+
+	# Non-improvement: highlight all reachable/buildable tiles as before
+	for coords in grid_ref.tiles:
+		var tile = grid_ref.tiles[coords]
+		var structure_exists = is_instance_valid(tile.structure)
+		var is_valid_for_placement = tile.is_buildable_terrain() and not structure_exists
+		var tint_color = TINT_COLOR_VALID if is_valid_for_placement else TINT_COLOR_INVALID
+		tile.set_overlay_tint(tint_color)
 	
 	# Determine reachable tiles for placement and highlight them
 	# References should be set via setup() in Game._ready()
@@ -230,45 +276,52 @@ func set_human_player(player_ref: Player):
 	print("StructurePlacer: Human Player set to Player %d." % placing_player.id if placing_player else -1)
 
 func attempt_placement(tile: Tile, map_node: Node3D) -> bool:
-	# This logic is based on the previously removed Game._on_build_requested logic,
-	# which we assume should be handled here now.
-	
-	if not is_instance_valid(tile) or tile.structure != null:
-		print("StructurePlacer: Cannot place here. Tile occupied or invalid.")
-		return false
-		
+	# Restrict placement for improvements to allowed neighbor tiles
 	var structure_config = GameData.STRUCTURE_TYPES.get(current_structure_type)
 	if not structure_config:
 		push_error("StructurePlacer: Invalid structure type %s." % current_structure_type)
 		return false
-		
-	# Player is already stored in placing_player	
+
+	var is_improvement = structure_config.has("category") and structure_config.category == "improvement"
+	if is_improvement:
+		# Recompute allowed neighbor coords (mirrors enter_placement_mode logic)
+		var allowed_neighbor_coords = []
+		if is_instance_valid(grid_ref) and is_instance_valid(placing_player):
+			var neighbor_set = {}
+			for coords in grid_ref.tiles:
+				var t = grid_ref.tiles[coords]
+				if is_instance_valid(t) and is_instance_valid(t.structure):
+					var base_config = GameData.STRUCTURE_TYPES.get(t.structure.structure_type)
+					if base_config and base_config.has("category") and base_config.category == "base":
+						if t.structure.player_id == placing_player.id:
+							for neighbor in t.neighbors:
+								if is_instance_valid(neighbor):
+									neighbor_set[neighbor.get_coords()] = true
+			allowed_neighbor_coords = neighbor_set.keys()
+		if not allowed_neighbor_coords.has(tile.get_coords()):
+			print("StructurePlacer: Cannot place improvement here. Not adjacent to base.")
+			return false
+
+	# Standard checks for all structures
+	if not is_instance_valid(tile) or tile.structure != null:
+		print("StructurePlacer: Cannot place here. Tile occupied or invalid.")
+		return false
 	if not is_instance_valid(placing_player):
 		push_error("StructurePlacer.attempt_placement: Human player reference is invalid.")
 		return false
-		
 	var cost = structure_config.get("cost", 0.0)
-	
 	if placing_player.resources < cost:
 		print("StructurePlacer: Not enough resources to build %s (Requires %f, Have %f)." % [current_structure_type, cost, placing_player.resources])
 		return false
-	
+
 	# Place the structure (Player.gd handles resource deduction and adding to map)
 	var success = placing_player.place_structure(current_structure_type, tile, map_node)
-	
-	# Important: Clear tint for the tile that was just placed on, as placement might change validity state instantly.
 	if success and is_instance_valid(tile):
 		tile.set_overlay_tint(TINT_COLOR_RESET)
-		
-		# Check if a drill hole needs to be made visible
 		var drill_hole = structure_config.get("drill_hole", false)
 		if drill_hole:
 			tile.set_hole_visibility(true)
-			
-		# Legacy check: Check if the tile needs to be hidden beneath the structure
 		var hide_tile = structure_config.get("hide_tile", false)
 		if hide_tile:
 			tile.set_tile_visibility(false)
-			
-	# Exit placement mode usually handled by Game._process after this call returns.
 	return success
