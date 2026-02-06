@@ -9,12 +9,14 @@ const GameData = preload("res://data/game_data.gd")
 const GameConfig = preload("res://data/game_config.gd")
 const Structure = preload("res://src/core/Structure.gd")
 const Tile = preload("res://src/core/Tile.gd")
+const Builder = preload("res://src/Builder.gd")
 
 # Required for Game.gd initialization logic
 var color: Color = Color.WHITE
 var target: Vector2i = Vector2i.ZERO
 var flow_field = null # Assumes FlowField is globally available or handled by Game.gd
 var units: Array = []
+var builders: Array = []
 var structures: Array[Structure] = []
 # Dictionary for O(1) structure lookup by grid coordinates: {Vector2i: Structure}
 var structures_by_coord: Dictionary = {}
@@ -223,7 +225,7 @@ func _on_structure_unit_produced(unit_type: String, structure: Structure):
 	spawn_unit(tile.x, tile.z, map_node, unit_type)
 	# Note: spawn_unit handles adding the unit to the player's `units` array internally.
 
-func place_structure(structure_key: String, target_tile: Tile, map_node: Node3D) -> bool:
+func place_structure(structure_key: String, target_tile: Tile, map_node: Node3D, instant: bool = false) -> bool:
 	"""
 	Attempts to build a structure at the target tile, checking resource cost and tile availability.
 	The structure is instantiated and added as a child of map_node.
@@ -261,40 +263,48 @@ func place_structure(structure_key: String, target_tile: Tile, map_node: Node3D)
 		return false
 		
 	# --- Checks Pass: Build Structure ---
-	
-	# Deduct resources
-	add_resources(-structure_cost)
-	
-	# Create structure instance
-	var structure_instance = Structure.new(structure_config, structure_key, id, target_tile, target_tile.world_pos)
-	
+
 	if not is_instance_valid(map_node):
 		push_error("Player %d.place_structure: Invalid Map node reference." % id)
 		return false
 
+	# Create structure (ghost if not instant)
+	var under_construction: bool = not instant
+	var structure_instance = Structure.new(structure_config, structure_key, id, target_tile, target_tile.world_pos, under_construction)
+
 	# Add structure as child of Map node (required for _ready and raycasting)
 	map_node.add_child(structure_instance)
-	
-	# Set target_tile.structure
+
+	# Set target_tile.structure (blocks other placement)
 	target_tile.structure = structure_instance
-	
-	# Add structure to player's array
+
+	# Add structure to player's array and coordinate lookup
 	structures.append(structure_instance)
-	# Add structure to coordinate lookup map
 	structures_by_coord[target_tile.get_coords()] = structure_instance
-	
-	# Handle unit producers and resource generators that need to start working
-	if structure_instance.produces_unit_type != "":
-		print("Player %d placed unit-producing structure '%s' at %s. Starting production." % [id, structure_key, target_tile.get_coords()])
-		# Connect unit_produced signal to _on_unit_produced
-		if structure_instance.has_signal("unit_produced"):
-			structure_instance.unit_produced.connect(_on_structure_unit_produced)
-			structure_instance.start_production()
+
+	# Connect destruction signal for victory/defeat tracking
+	var game_node = get_parent()
+	if is_instance_valid(game_node) and game_node.name == "Game":
+		if structure_instance.has_signal("destroyed"):
+			structure_instance.destroyed.connect(game_node._on_structure_destroyed)
+
+	if instant:
+		# Instant build: connect production signals and start immediately
+		if structure_instance.produces_unit_type != "":
+			if structure_instance.has_signal("unit_produced"):
+				structure_instance.unit_produced.connect(_on_structure_unit_produced)
+				structure_instance.start_production()
+		print("Player %d instantly placed structure '%s' at %s. Remaining resources: %f" % [id, structure_key, target_tile.get_coords(), resources])
+	else:
+		# Ghost build: register with nearest base's construction queue
+		structure_instance.resources_pending = structure_cost
+		var base = find_closest_base(target_tile.get_coords())
+		if is_instance_valid(base):
+			base.add_to_construction_queue(structure_instance, "structure")
 		else:
-			push_error("Structure lacks required 'unit_produced' signal!")
-	# Resource generators start automatically in Structure._ready (via _init setup)
-	
-	print("Player %d successfully placed structure '%s' at %s. Remaining resources: %f" % [id, structure_key, target_tile.get_coords(), resources])
+			push_warning("Player %d: No base found for construction queue." % id)
+		print("Player %d placed ghost structure '%s' at %s. Queued for construction. Remaining resources: %f" % [id, structure_key, target_tile.get_coords(), resources])
+
 	return true
 
 func get_structure_at_coords(coords: Vector2i) -> Structure:
@@ -302,3 +312,45 @@ func get_structure_at_coords(coords: Vector2i) -> Structure:
 	Retrieves the Structure instance at the given grid coordinates, if owned by this player.
 	"""
 	return structures_by_coord.get(coords, null)
+
+# --- Builder Dispatch ---
+
+func find_closest_base(target_coords: Vector2i) -> Structure:
+	"""
+	Finds the closest base structure to the given coordinates.
+	"""
+	var closest_base: Structure = null
+	var min_dist: float = 1e20
+	for structure in structures:
+		if not is_instance_valid(structure):
+			continue
+		var struct_config = GameData.STRUCTURE_TYPES.get(structure.structure_type)
+		if not struct_config or struct_config.get("category") != "base":
+			continue
+		if structure.is_under_construction:
+			continue
+		var base_coords = structure.current_tile.get_coords()
+		var dist = abs(base_coords.x - target_coords.x) + abs(base_coords.y - target_coords.y)
+		if dist < min_dist:
+			min_dist = dist
+			closest_base = structure
+	return closest_base
+
+func register_road_construction(tiles: Array):
+	"""
+	Registers road tiles for construction.
+	Each tile's road_resources_pending is already set by set_road_under_construction(cost).
+	"""
+	for road_tile in tiles:
+		if not is_instance_valid(road_tile):
+			continue
+
+		# Set the owner so the base can identify who is building this road
+		road_tile.road_owner_player_id = id
+
+func _remove_builder(builder: Builder):
+	"""
+	Removes a builder from the tracking array.
+	"""
+	if builders.has(builder):
+		builders.erase(builder)

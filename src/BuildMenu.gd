@@ -1,6 +1,7 @@
 extends VBoxContainer
 
 signal structure_selected(structure_key: String)
+signal road_build_requested()
 
 const GameData = preload("res://data/game_data.gd")
 const Player = preload("res://src/Player.gd")
@@ -33,6 +34,17 @@ func _ready():
 		button.pressed.connect(_on_build_button_pressed.bind(key))
 		add_child(button)
 
+	# 3. Add road button (separate from structure buttons)
+	var separator = HSeparator.new()
+	add_child(separator)
+
+	var road_button = Button.new()
+	road_button.mouse_filter = Control.MOUSE_FILTER_STOP
+	road_button.name = "road_button"
+	road_button.text = "%s (%d/tile)" % [GameData.ROAD_CONFIG.display_name, GameData.ROAD_CONFIG.cost_per_segment]
+	road_button.pressed.connect(_on_road_button_pressed)
+	add_child(road_button)
+
 func setup(p_player: Player):
 	"""
 	Sets the player reference and connects necessary signals.
@@ -60,6 +72,8 @@ func _on_resources_updated(new_resources: float):
 			if buildable_structures.has(key):
 				var cost = buildable_structures[key].get("cost", 0.0)
 				button.disabled = new_resources < cost
+			elif key == "road_button":
+				button.disabled = new_resources < GameData.ROAD_CONFIG.cost_per_segment
 
 func _on_build_button_pressed(structure_key: String):
 	"""
@@ -67,6 +81,10 @@ func _on_build_button_pressed(structure_key: String):
 	"""
 	print("BuildMenu: Structure selected: %s" % structure_key)
 	structure_selected.emit(structure_key)
+
+func _on_road_button_pressed():
+	print("BuildMenu: Road build requested.")
+	road_build_requested.emit()
 
 func _on_status_timer_timeout():
 	"""

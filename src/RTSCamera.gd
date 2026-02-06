@@ -12,6 +12,7 @@ const EDGE_THRESHOLD = 20.0
 const ZOOM_SPEED = 0.5
 const ZOOM_MIN = 1.0
 const ZOOM_MAX = 50.0
+const ZOOM_START = 40.0
  
 # State variables
 var is_middle_mouse_down: bool = false
@@ -33,13 +34,43 @@ func _ready():
 				push_error("Could not find Grid node under Map/Grid.")
 		else:
 			push_error("Could not find Map node.")
-			
+
 	if is_instance_valid(grid_registry):
 		map_bounds = grid_registry.get_map_bounds()
-		
+
 	# Ensure the camera is set up for 3D navigation
 	# Using 'ui' actions for movement, ensure they are mapped in Project Settings -> Input Map
 	make_current()
+
+func reset_to(tile: Tile, camera_height: float = 2.0) -> void:
+	"""
+	Resets the camera to look at a tile at ground level.
+	Positions the camera at the specified height such that a downward-looking ray
+	(at -55 degrees pitch) passes through the tile center.
+
+	Arguments:
+	- tile: The Tile to center on
+	- camera_height: The height above ground where the camera should be positioned
+	"""
+	if not is_instance_valid(tile):
+		push_error("RTSCamera.reset_to: Invalid tile provided")
+		return
+
+	# Calculate horizontal distance using tan(55°) ≈ 1.428
+	# distance = height / tan(angle)
+	var pitch_angle_degrees = 55.0
+	var pitch_angle_radians = deg_to_rad(pitch_angle_degrees)
+	var horizontal_distance = camera_height / tan(pitch_angle_radians)
+
+	# Position camera back and up from the target tile
+	# Assuming camera looks forward (negative Z direction)
+	var world_pos = tile.world_pos
+	var cam_x = world_pos.x
+	var cam_z = world_pos.z + horizontal_distance
+
+	position = Vector3(cam_x, camera_height, cam_z)
+	_clamp_position()
+	
 
 func _process(delta):
 	"""

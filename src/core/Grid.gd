@@ -259,3 +259,41 @@ func get_reachable_tiles(start_coord: Vector2i) -> Array[Vector2i]:
 				queue.append(neighbor_tile)
 				
 	return reachable_coords
+
+func find_path(from_coords: Vector2i, to_coords: Vector2i) -> Array[Vector2i]:
+	"""
+	BFS point-to-point pathfinding. Traverses all tiles including non-walkable ones
+	(since roads can be built on water/mountains). Returns ordered path from start to end.
+	Returns empty array if no path exists.
+	"""
+	if not tiles.has(from_coords) or not tiles.has(to_coords):
+		return []
+	if from_coords == to_coords:
+		return [from_coords]
+
+	var queue: Array = [from_coords]
+	var came_from: Dictionary = {from_coords: Vector2i(-1, -1)}
+
+	while not queue.is_empty():
+		var current: Vector2i = queue.pop_front()
+		if current == to_coords:
+			break
+
+		var current_tile: Tile = tiles[current]
+		for neighbor_tile in current_tile.neighbors:
+			var neighbor_coord: Vector2i = neighbor_tile.get_coords()
+			if not came_from.has(neighbor_coord):
+				came_from[neighbor_coord] = current
+				queue.append(neighbor_coord)
+
+	# Reconstruct path
+	if not came_from.has(to_coords):
+		return []
+
+	var path: Array[Vector2i] = []
+	var step: Vector2i = to_coords
+	while step != Vector2i(-1, -1):
+		path.append(step)
+		step = came_from[step]
+	path.reverse()
+	return path

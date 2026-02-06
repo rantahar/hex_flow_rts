@@ -6,6 +6,7 @@ const Grid = preload("res://src/core/Grid.gd")
 const Structure = preload("res://src/core/Structure.gd")
 const Unit = preload("res://src/core/Unit.gd")
 const GameConfig = preload("res://data/game_config.gd")
+const GameData = preload("res://data/game_data.gd")
 
 const FORMATION_RADIUS: float = Grid.HEX_SCALE * 0.3
 
@@ -40,6 +41,15 @@ var cost: float = 1.0
 # Reference to the Structure built on this tile (null if free)
 var structure: Structure = null
 
+# Road properties (roads are neutral when complete - usable by all players)
+var has_road: bool = false
+var road_hp: float = 0.0
+var road_visual: Node3D = null
+var road_under_construction: bool = false
+var road_resources_pending: float = 0.0
+var road_resources_in_transit: float = 0.0  # Resources being carried by builders already sent
+var road_owner_player_id: int = -1  # Player building this road (only relevant while under construction)
+
 # Reference to an optional child node representing a drill hole
 @onready var hole_node: Node3D = $Hole
 
@@ -57,18 +67,18 @@ func get_coords() -> Vector2i:
 	return Vector2i(x, z)
 
 # Finds and returns the index of the first available formation slot, and registers the unit in it.
-func claim_formation_slot(unit: Unit) -> int:
+func claim_formation_slot(unit: Node3D) -> int:
 	"""
-	Attempts to find and claim the first available formation slot on this tile for a given unit.
+	Attempts to find and claim the first available formation slot on this tile for a given unit or builder.
 
 	Arguments:
-	- unit (Unit): The unit instance attempting to claim a slot.
+	- unit (Node3D): The unit or builder instance attempting to claim a slot.
 
 	Returns:
 	- int: The index of the claimed slot (0-5), or -1 if all slots are occupied or a structure is present.
 	"""
-	# Structures block all formation slots
-	if structure != null:
+	# Completed structures block all formation slots (under-construction ones allow builders through)
+	if structure != null and not structure.is_under_construction:
 		return -1
 		
 	for i in range(occupied_slots.size()):
@@ -171,6 +181,160 @@ func set_hole_visibility(is_visible: bool):
 	if is_instance_valid(hole_node):
 		hole_node.visible = is_visible
 
+func set_road_under_construction(segment_cost: float = 0.0):
+	road_under_construction = true
+	road_resources_pending = segment_cost
+	_update_road_ghost_visual()
+
+func complete_road_construction():
+	road_under_construction = false
+	set_road()
+
+func set_road():
+	has_road = true
+	road_under_construction = false
+	road_hp = GameData.ROAD_CONFIG.max_hp
+	_update_road_visual()
+	# Also update neighbors so they draw connections to this tile
+	for neighbor in neighbors:
+		if is_instance_valid(neighbor) and neighbor.has_road:
+			neighbor._update_road_visual()
+
+func clear_road():
+	has_road = false
+	road_hp = 0.0
+	_remove_road_visual()
+	# Update neighbors to remove connections to this tile
+	for neighbor in neighbors:
+		if is_instance_valid(neighbor) and neighbor.has_road:
+			neighbor._update_road_visual()
+
+func damage_road(amount: float):
+	if not has_road:
+		return
+	road_hp -= amount
+	if road_hp <= 0:
+		clear_road()
+
+func _remove_road_visual():
+	if is_instance_valid(road_visual):
+		road_visual.queue_free()
+		road_visual = null
+
+func _update_road_ghost_visual():
+	_remove_road_visual()
+	road_visual = Node3D.new()
+	road_visual.name = "RoadGhostVisual"
+	add_child(road_visual)
+
+	var ghost_mat = StandardMaterial3D.new()
+	ghost_mat.albedo_color = Color(0.55, 0.35, 0.15, 0.35)
+	ghost_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	ghost_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	var road_config = GameData.ROAD_CONFIG
+	var line_w: float = road_config.line_width
+	var line_h: float = road_config.line_height
+	var y_off: float = road_config.visual_y_offset
+
+	var center_ground_y = _get_ground_y(world_pos.x, world_pos.z)
+	var center_local_y = center_ground_y - global_position.y + y_off
+
+	var center_box = BoxMesh.new()
+	center_box.size = Vector3(line_w * 1.5, line_h, line_w * 1.5)
+	var center_mesh = MeshInstance3D.new()
+	center_mesh.mesh = center_box
+	center_mesh.material_override = ghost_mat
+	center_mesh.position = Vector3(0.0, center_local_y, 0.0)
+	road_visual.add_child(center_mesh)
+
+func _get_ground_y(world_x: float, world_z: float) -> float:
+	# Tile -> Grid -> Map
+	var grid_node = get_parent()
+	if is_instance_valid(grid_node):
+		var map_node = grid_node.get_parent()
+		if is_instance_valid(map_node) and map_node.has_method("get_height_at_world_pos"):
+			return map_node.get_height_at_world_pos(Vector3(world_x, 0.0, world_z))
+	return 0.0
+
+func _update_road_visual():
+	_remove_road_visual()
+	if not has_road:
+		return
+
+	road_visual = Node3D.new()
+	road_visual.name = "RoadVisual"
+	add_child(road_visual)
+
+	var road_mat = StandardMaterial3D.new()
+	road_mat.albedo_color = Color(0.55, 0.35, 0.15)
+	road_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	var road_config = GameData.ROAD_CONFIG
+	var line_w: float = road_config.line_width
+	var line_h: float = road_config.line_height
+	var y_off: float = road_config.visual_y_offset
+
+	# Raycast at tile center for ground height
+	var center_ground_y = _get_ground_y(world_pos.x, world_pos.z)
+	var center_local_y = center_ground_y - global_position.y + y_off
+
+	# Center dot so isolated/endpoint road tiles are visible
+	var center_box = BoxMesh.new()
+	center_box.size = Vector3(line_w * 1.5, line_h, line_w * 1.5)
+	var center_mesh = MeshInstance3D.new()
+	center_mesh.mesh = center_box
+	center_mesh.material_override = road_mat
+	center_mesh.position = Vector3(0.0, center_local_y, 0.0)
+	road_visual.add_child(center_mesh)
+
+	# Draw a line from center toward each neighboring road tile's shared edge
+	for neighbor in neighbors:
+		if not is_instance_valid(neighbor) or not neighbor.has_road:
+			continue
+
+		# Horizontal direction to neighbor
+		var dir_xz = Vector3(neighbor.world_pos.x - world_pos.x, 0.0, neighbor.world_pos.z - world_pos.z)
+		var horiz_len = dir_xz.length()
+		if horiz_len < 0.001:
+			continue
+
+		var half_len = horiz_len * 0.5
+		var dir_norm = dir_xz.normalized()
+
+		# Raycast at edge midpoint (halfway to neighbor) for ground height
+		var edge_world_x = world_pos.x + dir_norm.x * half_len
+		var edge_world_z = world_pos.z + dir_norm.z * half_len
+		var edge_ground_y = _get_ground_y(edge_world_x, edge_world_z)
+		var edge_local_y = edge_ground_y - global_position.y + y_off
+
+		# Start (center) and end (edge midpoint) in local space
+		var start_pos = Vector3(0.0, center_local_y, 0.0)
+		var end_pos = Vector3(dir_norm.x * half_len, edge_local_y, dir_norm.z * half_len)
+
+		var seg_dir = end_pos - start_pos
+		var seg_length = seg_dir.length()
+		if seg_length < 0.001:
+			continue
+
+		var box = BoxMesh.new()
+		box.size = Vector3(line_w, line_h, seg_length)
+
+		var line_mesh = MeshInstance3D.new()
+		line_mesh.mesh = box
+		line_mesh.material_override = road_mat
+
+		# Position at segment midpoint
+		line_mesh.position = (start_pos + end_pos) * 0.5
+
+		# Orient: Y rotation for horizontal direction, X rotation for slope
+		var seg_norm = seg_dir.normalized()
+		line_mesh.rotation.y = atan2(seg_norm.x, seg_norm.z)
+		var horiz_dist = Vector2(seg_norm.x, seg_norm.z).length()
+		line_mesh.rotation.x = -atan2(seg_norm.y, horiz_dist)
+
+		road_visual.add_child(line_mesh)
+
 # Calculates the flow field cost for a unit of player_id attempting to move onto this tile.
 func get_flow_cost(player_id: int) -> float:
 	"""
@@ -186,16 +350,32 @@ func get_flow_cost(player_id: int) -> float:
 	if is_flow_target(player_id):
 		return 0.0
 
-	# 2. Blocked Check (Cost INF)
+	# 2. Road Check - roads override walkability (bridges over water)
+	# Roads under construction don't provide cost benefits yet
+	if has_road and not road_under_construction:
+		var base_cost: float = GameData.ROAD_CONFIG.road_tile_cost
+		# Still check for friendly structure blocking on road tiles (under-construction allowed)
+		if structure != null and is_instance_valid(structure) and structure.player_id == player_id and not structure.is_under_construction:
+			return INF
+		var total_road_cost: float = base_cost
+		var road_friendly_count: int = 0
+		for unit in occupied_slots:
+			if unit != null and is_instance_valid(unit) and unit.player_id == player_id:
+				road_friendly_count += 1
+		if road_friendly_count > 0:
+			total_road_cost += road_friendly_count * GameConfig.DENSITY_COST_MULTIPLIER
+		return total_road_cost
+
+	# 3. Blocked Check (Cost INF)
 	if not walkable:
 		return INF
-	
-	# Friendly structures block all movement onto the tile
-	if structure != null and is_instance_valid(structure) and structure.player_id == player_id:
+
+	# Friendly structures block all movement onto the tile (under-construction allowed)
+	if structure != null and is_instance_valid(structure) and structure.player_id == player_id and not structure.is_under_construction:
 		return INF
-			
-	# 3. Base Terrain Cost + Density Cost
-	
+
+	# 4. Base Terrain Cost + Density Cost
+
 	var total_cost: float = cost
 	var density_cost: float = 0.0
 	
@@ -220,6 +400,15 @@ func is_buildable_terrain() -> bool:
 	For simplicity, currently requires the tile to be walkable.
 	"""
 	return walkable
+
+func get_road_resource_request() -> float:
+	"""
+	Returns how many resources are still needed for this road.
+	Accounts for resources already in transit via builders.
+	"""
+	if not road_under_construction or road_resources_pending <= 0:
+		return 0.0
+	return maxf(0.0, road_resources_pending - road_resources_in_transit)
 
 func _ready():
 	# Ensure the Hole node is initially hidden and non-pickable,

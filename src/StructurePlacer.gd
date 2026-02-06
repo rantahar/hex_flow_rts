@@ -21,12 +21,17 @@ var reachable_coords: Array[Vector2i] = [] # Stores coordinates whose tiles need
 # Placeholder for the visual preview node
 var preview_instance = null
 
+# Road drawing mode state
+var road_mode: bool = false
+var road_start_tile: Tile = null
+var road_preview_path: Array[Vector2i] = []
+
 func _init():
 	# Ensure the node is callable via the Game script
 	pass
 
 func is_active() -> bool:
-	return active
+	return active or road_mode
 
 func enter_placement_mode(structure_type: String):
 	current_structure_type = structure_type
@@ -83,23 +88,37 @@ func enter_placement_mode(structure_type: String):
 	# Determine reachable tiles for placement and highlight them
 	# References should be set via setup() in Game._ready()
 	var grid = grid_ref
-	
-	# Get Game node reference to access selected_structure
-	var game = get_parent()
-	
-	if is_instance_valid(grid) and is_instance_valid(game):
-		var starting_coords: Vector2i
-		# Use selected structure if available, otherwise use spawn tile (main base)
-		if is_instance_valid(game.selected_structure):
-			starting_coords = game.selected_structure.current_tile.get_coords()
-		elif is_instance_valid(placing_player) and is_instance_valid(placing_player.spawn_tile):
-			starting_coords = placing_player.spawn_tile.get_coords()
-		else:
-			push_error("StructurePlacer: Cannot determine starting point for reachability.")
+
+	if is_instance_valid(grid) and is_instance_valid(placing_player):
+		# Find all base structures owned by the player
+		var player_base_coords: Array[Vector2i] = []
+		for structure in placing_player.structures:
+			if is_instance_valid(structure):
+				var struct_config = GameData.STRUCTURE_TYPES.get(structure.structure_type)
+				if struct_config and struct_config.get("category") == "base":
+					player_base_coords.append(structure.current_tile.get_coords())
+
+		# Fallback to spawn_tile if no bases found
+		if player_base_coords.is_empty() and is_instance_valid(placing_player.spawn_tile):
+			player_base_coords.append(placing_player.spawn_tile.get_coords())
+
+		if player_base_coords.is_empty():
+			push_error("StructurePlacer: No bases found for reachability calculation.")
 			active = false
 			return
-			
-		reachable_coords = grid.get_reachable_tiles(starting_coords)
+
+		# Calculate reachable tiles from all bases and merge results
+		var reachable_set: Dictionary = {}
+		for coords in player_base_coords:
+			var tiles_from_base = grid.get_reachable_tiles(coords)
+			for tile_coord in tiles_from_base:
+				reachable_set[tile_coord] = true
+
+		reachable_coords.clear()
+		for coord in reachable_set.keys():
+			reachable_coords.append(coord)
+
+		print("StructurePlacer: Calculated reachability from %d bases, %d tiles reachable" % [player_base_coords.size(), reachable_coords.size()])
 		
 		# --- REQUIREMENT 1: Apply tint to ALL tiles when entering placement mode ---
 		for coords in grid.tiles:
@@ -113,9 +132,9 @@ func enter_placement_mode(structure_type: String):
 	else:
 		if not is_instance_valid(grid):
 			push_error("StructurePlacer: Missing Grid reference. Setup likely failed.")
-		elif not is_instance_valid(game):
-			push_error("StructurePlacer: Missing Game node reference.")
-		
+		elif not is_instance_valid(placing_player):
+			push_error("StructurePlacer: Missing Player reference.")
+
 		active = false
 		return
 	
@@ -325,3 +344,139 @@ func attempt_placement(tile: Tile, map_node: Node3D) -> bool:
 		if hide_tile:
 			tile.set_tile_visibility(false)
 	return success
+
+# --- Road Drawing Mode ---
+
+const TINT_COLOR_ROAD_PREVIEW: Color = Color(0.6, 0.4, 0.2, 0.5)
+const TINT_COLOR_ROAD_START: Color = Color(1.0, 1.0, 0.0, 0.5)
+
+func enter_road_mode():
+	road_mode = true
+	road_start_tile = null
+	road_preview_path.clear()
+
+	if is_instance_valid(grid_ref):
+		for coords in grid_ref.tiles:
+			var tile = grid_ref.tiles[coords]
+			if is_instance_valid(tile):
+				# All tiles are valid for roads (including water, at higher cost)
+				var tint = TINT_COLOR_VALID if not tile.has_road else TINT_COLOR_RESET
+				tile.set_overlay_tint(tint)
+
+	print("StructurePlacer: Entered road drawing mode.")
+
+func exit_road_mode():
+	road_mode = false
+	road_start_tile = null
+	_clear_road_preview()
+
+	# Clear all overlay tints (road visuals are handled by line meshes in Tile)
+	if is_instance_valid(grid_ref):
+		for coords in grid_ref.tiles:
+			var tile = grid_ref.tiles.get(coords)
+			if is_instance_valid(tile):
+				tile.set_overlay_tint(TINT_COLOR_RESET)
+
+	print("StructurePlacer: Exited road drawing mode.")
+
+func update_road_preview(hovered_tile: Tile):
+	if not road_mode or not is_instance_valid(hovered_tile) or not is_instance_valid(grid_ref):
+		return
+
+	if not is_instance_valid(road_start_tile):
+		return
+
+	# Clear previous preview
+	_clear_road_preview()
+
+	# Calculate path from start to hovered tile
+	road_preview_path = grid_ref.find_path(road_start_tile.get_coords(), hovered_tile.get_coords())
+
+	# Tint preview path tiles
+	for coords in road_preview_path:
+		var tile = grid_ref.tiles.get(coords)
+		if is_instance_valid(tile):
+			tile.set_overlay_tint(TINT_COLOR_ROAD_PREVIEW)
+
+	# Keep start tile highlighted
+	road_start_tile.set_overlay_tint(TINT_COLOR_ROAD_START)
+
+func attempt_road_click(tile: Tile) -> bool:
+	if not road_mode or not is_instance_valid(tile) or not is_instance_valid(grid_ref):
+		return false
+
+	# First click: set start tile
+	if not is_instance_valid(road_start_tile):
+		road_start_tile = tile
+		tile.set_overlay_tint(TINT_COLOR_ROAD_START)
+		print("StructurePlacer: Road start set at %s" % tile.get_coords())
+		return true
+
+	# Second click: build road along path
+	var path = grid_ref.find_path(road_start_tile.get_coords(), tile.get_coords())
+	if path.is_empty():
+		print("StructurePlacer: No path found for road.")
+		return false
+
+	# Calculate total cost
+	var total_cost: float = 0.0
+	var road_config = GameData.ROAD_CONFIG
+	for coords in path:
+		var path_tile = grid_ref.tiles.get(coords)
+		if is_instance_valid(path_tile) and not path_tile.has_road and not path_tile.road_under_construction:
+			if path_tile.walkable:
+				total_cost += road_config.cost_per_segment
+			else:
+				total_cost += road_config.cost_per_segment * road_config.water_cost_multiplier
+
+	# Check affordability
+	if not is_instance_valid(placing_player) or placing_player.resources < total_cost:
+		print("StructurePlacer: Not enough resources for road. Need %0.0f, have %0.0f." % [total_cost, placing_player.resources if is_instance_valid(placing_player) else 0.0])
+		return false
+
+	# Deduct resources and mark tiles as under construction
+	placing_player.add_resources(-total_cost)
+
+	var road_tiles: Array = []
+	for coords in path:
+		var path_tile = grid_ref.tiles.get(coords)
+		if is_instance_valid(path_tile) and not path_tile.has_road and not path_tile.road_under_construction:
+			var segment_cost: float = road_config.cost_per_segment
+			if not path_tile.walkable:
+				segment_cost *= road_config.water_cost_multiplier
+			path_tile.set_road_under_construction(segment_cost)
+			road_tiles.append(path_tile)
+
+	# Register road tiles with nearest base construction queues
+	placing_player.register_road_construction(road_tiles)
+
+	print("StructurePlacer: Road construction started with %d segments for %0.0f resources." % [road_tiles.size(), total_cost])
+
+	# Reset for next road segment
+	_clear_road_preview()
+	road_start_tile = null
+	road_preview_path.clear()
+	return true
+
+func _clear_road_preview():
+	for coords in road_preview_path:
+		if is_instance_valid(grid_ref) and grid_ref.tiles.has(coords):
+			var tile = grid_ref.tiles[coords]
+			if is_instance_valid(tile):
+				# Restore to green (buildable) tint during road mode
+				tile.set_overlay_tint(TINT_COLOR_VALID if (not tile.has_road and not tile.road_under_construction) else TINT_COLOR_RESET)
+	road_preview_path.clear()
+
+func get_road_preview_cost() -> float:
+	if road_preview_path.is_empty() or not is_instance_valid(grid_ref):
+		return 0.0
+	var total: float = 0.0
+	var road_config = GameData.ROAD_CONFIG
+	for coords in road_preview_path:
+		var tile = grid_ref.tiles.get(coords)
+		if is_instance_valid(tile) and not tile.has_road and not tile.road_under_construction:
+			if tile.walkable:
+				total += road_config.cost_per_segment
+			else:
+				total += road_config.cost_per_segment * road_config.water_cost_multiplier
+	return total

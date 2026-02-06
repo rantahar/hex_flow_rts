@@ -119,18 +119,6 @@ const STRUCTURE_TYPES = {
 		"y_offset_fraction": 0.0
 	},
 	
-	"transport_hub": {
-		"display_name": "Transport Hub",
-		"mesh_path": "res://assets/robot_simple.obj",
-		"size": 0.3,
-		"cost": 80,
-		"max_health": 100,
-		"speed_multiplier": 1.5,
-		"effect_radius": 6,
-		"category": "forward",
-		"y_offset_fraction": 0.0
-	},
-	
 	"artillery": {
 		"display_name": "Artillery",
 		"mesh_path": "res://assets/robot_simple.obj",
@@ -144,6 +132,26 @@ const STRUCTURE_TYPES = {
 		"category": "forward",
 		"y_offset_fraction": 0.0
 	},
+}
+
+const BUILDER_CONFIG = {
+	"max_carry": 20,
+	"mesh_path": "res://assets/robot.obj",
+	"size": 0.05,
+	"move_speed": 0.5,
+	"max_health": 20.0,
+	"spawn_interval": 0.5,
+}
+
+const ROAD_CONFIG = {
+	"cost_per_segment": 10,
+	"water_cost_multiplier": 3.0,
+	"road_tile_cost": 0.3,
+	"display_name": "Road",
+	"max_hp": 50.0,
+	"line_width": 0.06,
+	"line_height": 0.03,
+	"visual_y_offset": 0.08,
 }
 
 const TILES = {

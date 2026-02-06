@@ -1,11 +1,18 @@
 extends Node3D
 class_name Game
+
+enum GameState {
+	PLAYING,
+	VICTORY,
+	DEFEAT
+}
+
 const GameData = preload("res://data/game_data.gd")
 const GameConfig = preload("res://data/game_config.gd")
 const ResourceDisplay = preload("res://src/ResourceDisplay.gd")
 const BuildMenu = preload("res://src/BuildMenu.gd")
 
-signal structure_selected(structure: Structure)
+signal selection_changed(structures: Array[Structure])
 
 @onready var map_node = $Map
 @onready var canvas_layer = $CanvasLayer
@@ -14,11 +21,16 @@ signal structure_selected(structure: Structure)
 var players: Array[Player] = []
 var player_visualizers: Array[FlowFieldVisualizer] = []
 var current_visualization_player: int = 0
-var selected_structure: Structure = null # Tracks the currently selected structure
+var selected_structures: Array[Structure] = [] # Tracks currently selected structures
 var visualization_timer: Timer
 var flow_recalculation_timer: Timer
 var game_time_seconds: int = 0
 var game_clock_timer: Timer
+
+var game_state: GameState = GameState.PLAYING
+var game_over_overlay: Control = null
+var game_over_title: Label = null
+var game_over_message: Label = null
 
 # Clears existing players array and initializes players based on config.
 # player_configs: Array of Dictionary, e.g., [{id: 0, color: Color.RED, display_name: "Red Team"}]
@@ -145,6 +157,129 @@ func _get_human_player() -> Player:
 	push_warning("No human player found in configuration.")
 	return null
 
+func set_game_state(new_state: GameState):
+	"""Changes game state and pauses the game."""
+	if game_state == new_state:
+		return
+
+	game_state = new_state
+
+	if game_state == GameState.VICTORY or game_state == GameState.DEFEAT:
+		# Pause the entire tree (excluding CanvasLayer nodes like UI)
+		get_tree().paused = true
+		print("Game: State changed to %s - Game paused" % GameState.keys()[new_state])
+
+# --- Structure Selection Management ---
+
+func select_structure(structure: Structure, multi_select: bool = false):
+	"""
+	Selects a structure. If multi_select is false, clears previous selection.
+	"""
+	if not multi_select:
+		clear_selection()
+
+	if structure not in selected_structures:
+		selected_structures.append(structure)
+		structure.set_selected(true)
+		print("Game: Selected structure %s at %s" % [structure.display_name, structure.current_tile.get_coords()])
+
+	selection_changed.emit(selected_structures)
+
+func deselect_structure(structure: Structure):
+	"""
+	Removes a structure from the selection.
+	"""
+	if structure in selected_structures:
+		selected_structures.erase(structure)
+		structure.set_selected(false)
+
+	selection_changed.emit(selected_structures)
+
+func clear_selection():
+	"""
+	Clears all selected structures.
+	"""
+	for structure in selected_structures:
+		structure.set_selected(false)
+
+	selected_structures.clear()
+	selection_changed.emit(selected_structures)
+
+func select_all_of_type(structure_type: String):
+	"""
+	Selects all structures of the specified type owned by the human player.
+	"""
+	clear_selection()
+	var human_player = _get_human_player()
+
+	if not is_instance_valid(human_player):
+		return
+
+	for structure in human_player.structures:
+		if structure.structure_type == structure_type:
+			selected_structures.append(structure)
+			structure.set_selected(true)
+
+	print("Game: Selected %d structures of type %s" % [selected_structures.size(), structure_type])
+	selection_changed.emit(selected_structures)
+
+func count_player_bases(player: Player) -> int:
+	"""Counts operational (completed) bases owned by a player."""
+	if not is_instance_valid(player):
+		return 0
+
+	var base_count: int = 0
+	for structure in player.structures:
+		if not is_instance_valid(structure):
+			continue
+		if structure.is_under_construction:
+			continue
+		var config = GameData.STRUCTURE_TYPES.get(structure.structure_type)
+		if config and config.get("category") == "base":
+			base_count += 1
+
+	return base_count
+
+func check_victory_defeat_conditions():
+	"""Checks if victory or defeat conditions are met."""
+	if game_state != GameState.PLAYING:
+		return
+
+	var human_player = _get_human_player()
+	if not is_instance_valid(human_player):
+		return
+
+	var human_base_count = count_player_bases(human_player)
+
+	# Check defeat first: human player has no bases
+	if human_base_count == 0:
+		set_game_state(GameState.DEFEAT)
+		_show_game_over_screen(false)
+		return
+
+	# Check victory: all AI players have no bases
+	var all_enemies_defeated = true
+	for player in players:
+		if not is_instance_valid(player):
+			continue
+		if player == human_player:
+			continue
+
+		var enemy_base_count = count_player_bases(player)
+		if enemy_base_count > 0:
+			all_enemies_defeated = false
+			break
+
+	if all_enemies_defeated:
+		set_game_state(GameState.VICTORY)
+		_show_game_over_screen(true)
+
+func _on_structure_destroyed(structure: Structure):
+	"""Called when any structure is destroyed."""
+	print("Game: Structure destroyed at %s (Player %d)" % [structure.current_tile.get_coords(), structure.player_id])
+	# Defer check to next frame to allow cleanup to complete
+	call_deferred("check_victory_defeat_conditions")
+
 func _ready() -> void:
 	"""
 	Called when the node enters the scene tree for the first time.
@@ -181,19 +316,28 @@ func _ready() -> void:
 		player1.spawn_tile = _find_walkable_spawn_tile(grid, P1_SPAWN_COORDS)
 		if player1.spawn_tile:
 			player1.calculate_flow(grid)
-	
-	# Task 5: Spawn initial bases for each player
+
+	# Wait for physics engine to initialize collision shapes
+	await get_tree().process_frame
+
+	# Task 5: Spawn initial bases for each player (after world is ready)
 	for player in players:
 		if not is_instance_valid(player) or not player.spawn_tile:
 			continue
-			
+
 		# 1. Place the Main Base (cost 0, not buildable by normal means)
-		var success = player.place_structure("base", player.spawn_tile, map_node)
+		var success = player.place_structure("base", player.spawn_tile, map_node, true)
 		if not success:
 			push_error("Failed to place base for Player %d at %s." % [player.id, player.spawn_tile.get_coords()])
 			continue
 
-		# 2. Call AI start turn logic if applicable
+		# 2. Center camera on human player's base
+		if player.config.get("type") == "human":
+			var camera = $Camera3D
+			if is_instance_valid(camera) and is_instance_valid(player.spawn_tile):
+				camera.reset_to(player.spawn_tile)
+
+		# 3. Call AI start turn logic if applicable
 		if player.config.get("type") == "ai":
 			# Ensure we only call this on AI players
 			if player is AIPlayer:
@@ -211,24 +355,38 @@ func _ready() -> void:
 
 	# UI Setup for the human player
 	if is_instance_valid(human_player) and is_instance_valid(canvas_layer):
-		# Paths assume CanvasLayer is a direct child of Game, and MarginContainer is a direct child of CanvasLayer.
-		# Assumes the first MarginContainer holds ResourceDisplay and the second holds BuildMenu.
-		var resource_display = canvas_layer.get_node("MarginContainer/ResourceDisplay")
-		var build_menu = canvas_layer.get_node("MarginContainer2/BuildMenu")
-		
+		# Paths assume CanvasLayer is a direct child of Game, and TopLeftUI contains both menus.
+		var resource_display = canvas_layer.get_node_or_null("TopLeftUI/ResourceDisplay")
+		var build_menu = canvas_layer.get_node_or_null("TopLeftUI/BuildMenu")
+
+		if not is_instance_valid(resource_display):
+			push_error("Game: Could not find ResourceDisplay node at path TopLeftUI/ResourceDisplay. Check game.tscn.")
 		if not is_instance_valid(build_menu):
-			push_error("Game: Could not find BuildMenu node at path MarginContainer2/BuildMenu. Check game.tscn.")
-		
+			push_error("Game: Could not find BuildMenu node at path TopLeftUI/BuildMenu. Check game.tscn.")
+
 		if is_instance_valid(resource_display) and resource_display is ResourceDisplay:
 			resource_display.setup(human_player)
 		if is_instance_valid(build_menu) and build_menu is BuildMenu:
 			build_menu.setup(human_player)
-			
+
 			# --- Building UI Signal Handling ---
 			# Connect the BuildMenu's selected signal to the placement handler
 			if build_menu.has_signal("structure_selected"):
 				build_menu.structure_selected.connect(_on_structure_selected)
-				
+			if build_menu.has_signal("road_build_requested"):
+				build_menu.road_build_requested.connect(_on_road_build_requested)
+
+	# Create game over overlay
+	_setup_game_over_overlay()
+
+	# Connect structure destruction signals for all initial structures
+	for player in players:
+		if not is_instance_valid(player):
+			continue
+		for structure in player.structures:
+			if is_instance_valid(structure) and structure.has_signal("destroyed"):
+				structure.destroyed.connect(_on_structure_destroyed)
+
 	# Connect hex click signal from camera for placement confirmation
 	if $Camera3D.has_signal("hex_clicked"):
 		$Camera3D.hex_clicked.connect(_on_hex_clicked)
@@ -244,17 +402,26 @@ func _on_structure_selected(structure_type: String):
 	"""
 	Initiates structure placement mode for the human player.
 	"""
-	
+
 	if is_instance_valid(structure_placer):
 		structure_placer.enter_placement_mode(structure_type)
 		print("Game: Entered placement mode for %s." % structure_type)
 	else:
 		push_error("Game._on_structure_selected: StructurePlacer node is not set up.")
 
+func _on_road_build_requested():
+	if is_instance_valid(structure_placer):
+		structure_placer.enter_road_mode()
+		print("Game: Entered road drawing mode.")
+
 func _on_hex_clicked(tile: Tile, button_index: int):
 	"""
 	Handles a click on a hexagonal tile, primarily for structure placement confirmation, right-click cancellation, and selection.
 	"""
+	# Ignore clicks during game over
+	if game_state != GameState.PLAYING:
+		return
+
 	if not is_instance_valid(tile):
 		return
 		
@@ -262,47 +429,55 @@ func _on_hex_clicked(tile: Tile, button_index: int):
 	var human_player = _get_human_player()
 
 	if is_instance_valid(structure_placer) and structure_placer.is_active():
+		# --- Road Mode ---
+		if structure_placer.road_mode:
+			if button_index == MOUSE_BUTTON_RIGHT:
+				structure_placer.exit_road_mode()
+				print("Game: Road drawing mode cancelled via right-click.")
+				return
+			if button_index == MOUSE_BUTTON_LEFT:
+				structure_placer.attempt_road_click(tile)
+				return
+			return
+
 		# --- A. Right Click: Exit Placement Mode ---
 		if button_index == MOUSE_BUTTON_RIGHT:
 			structure_placer.exit_placement_mode()
 			print("Game: Placement mode cancelled via right-click.")
 			return
-			
+
 		# --- B. Left Click: Structure Placement Confirmation ---
 		if button_index == MOUSE_BUTTON_LEFT:
 			var success = structure_placer.attempt_placement(tile, map_node)
-			
+
 			if success:
 				print("Game: Structure placed successfully at %s." % coords)
-			
+
 			# Always consume the click event if placement mode is active
 			return
-		
+
 		# Consume input if placement mode is active regardless of button index (unless handled)
 		return
 
 	# --- C. Structure Selection (if placement mode is inactive) ---
 	if is_instance_valid(human_player):
 		var clicked_structure: Structure = human_player.get_structure_at_coords(coords)
-		
+
 		if is_instance_valid(clicked_structure):
 			# If the tile has a structure owned by the player, select it.
 			if clicked_structure.player_id == human_player.id:
-				selected_structure = clicked_structure
-				print("Game: Selected structure at %s." % coords)
-				structure_selected.emit(selected_structure)
+				var multi_select = Input.is_key_pressed(KEY_CTRL)
+				select_structure(clicked_structure, multi_select)
 				return
 			else:
 				# Clicking an enemy structure: clear selection.
-				selected_structure = null
-				structure_selected.emit(null)
+				clear_selection()
 				return
-		
+
 	# Clicking an empty tile or non-player-owned entity (if not handled by RTSCamera for units): clear selection
-	if selected_structure != null:
-		selected_structure = null
+	if not selected_structures.is_empty():
+		clear_selection()
 		print("Game: Selection cleared.")
-		structure_selected.emit(null)
 		
 	# Allow RTSCamera to handle the click (e.g., unit movement/selection).
 	pass
@@ -354,21 +529,112 @@ func _get_hovered_tile() -> Tile:
 	
 	return null
 
+func _setup_game_over_overlay():
+	"""Creates the game over overlay UI programmatically."""
+	# Create main overlay control
+	game_over_overlay = Control.new()
+	game_over_overlay.name = "GameOverOverlay"
+	game_over_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	game_over_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	game_over_overlay.hide()
+
+	# Semi-transparent dark background
+	var bg_panel = ColorRect.new()
+	bg_panel.color = Color(0, 0, 0, 0.7)
+	bg_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	game_over_overlay.add_child(bg_panel)
+
+	# Center container
+	var center_container = CenterContainer.new()
+	center_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	game_over_overlay.add_child(center_container)
+
+	# VBox for content
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 30)
+	center_container.add_child(vbox)
+
+	# Title label
+	game_over_title = Label.new()
+	game_over_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	game_over_title.add_theme_font_size_override("font_size", 72)
+	vbox.add_child(game_over_title)
+
+	# Message label
+	game_over_message = Label.new()
+	game_over_message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	game_over_message.add_theme_font_size_override("font_size", 32)
+	vbox.add_child(game_over_message)
+
+	# Restart button
+	var restart_button = Button.new()
+	restart_button.text = "Restart"
+	restart_button.custom_minimum_size = Vector2(200, 50)
+	restart_button.pressed.connect(_on_restart_pressed)
+	vbox.add_child(restart_button)
+
+	# Quit button
+	var quit_button = Button.new()
+	quit_button.text = "Quit to Desktop"
+	quit_button.custom_minimum_size = Vector2(200, 50)
+	quit_button.pressed.connect(_on_quit_pressed)
+	vbox.add_child(quit_button)
+
+	# Add to canvas layer
+	canvas_layer.add_child(game_over_overlay)
+
+func _show_game_over_screen(is_victory: bool):
+	"""Displays the game over overlay."""
+	if not is_instance_valid(game_over_overlay):
+		push_error("Game: GameOverOverlay not found")
+		return
+
+	if is_victory:
+		game_over_title.text = "VICTORY!"
+		game_over_title.add_theme_color_override("font_color", Color.GOLD)
+		game_over_message.text = "All enemy bases have been destroyed!"
+	else:
+		game_over_title.text = "DEFEAT"
+		game_over_title.add_theme_color_override("font_color", Color.RED)
+		game_over_message.text = "All your bases have been destroyed."
+
+	game_over_overlay.show()
+	print("Game: Showing game over screen - Victory: %s" % is_victory)
+
+func _on_restart_pressed():
+	"""Restarts the game by reloading the current scene."""
+	print("Game: Restarting game...")
+	get_tree().paused = false
+	get_tree().reload_current_scene()
+
+func _on_quit_pressed():
+	"""Quits the game application."""
+	print("Game: Quitting game...")
+	get_tree().quit()
+
 # Handles placement preview updates and cancellation
 func _process(delta: float) -> void:
+	# Disable input processing during game over
+	if game_state != GameState.PLAYING:
+		return
+
 	if is_instance_valid(structure_placer) and structure_placer.is_active():
 		# Handle cancellation:
 		if Input.is_action_just_pressed("ui_cancel"):
-			structure_placer.exit_placement_mode()
-			print("Game: Placement mode cancelled.")
+			if structure_placer.road_mode:
+				structure_placer.exit_road_mode()
+				print("Game: Road drawing mode cancelled.")
+			else:
+				structure_placer.exit_placement_mode()
+				print("Game: Placement mode cancelled.")
 			return
 
-		# Handle placement preview updates:
 		var hovered_tile = _get_hovered_tile()
-		
-		# Only update preview if placement mode is active for a valid player
 		if is_instance_valid(hovered_tile):
-			structure_placer.update_preview(hovered_tile)
+			if structure_placer.road_mode:
+				structure_placer.update_road_preview(hovered_tile)
+			else:
+				structure_placer.update_preview(hovered_tile)
 
 
 # Initializes flow fields and visualization after a delay

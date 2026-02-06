@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3 uid="uid://cmri410y4al53"]
+[gd_scene load_steps=14 format=3 uid="uid://cmri410y4al53"]
 
 [ext_resource type="Script" path="res://src/RTSCamera.gd" id="1_i1nf2"]
 [ext_resource type="Script" path="res://src/core/MapGenerator.gd" id="1_r4x5c"]
@@ -9,6 +9,7 @@
 [ext_resource type="Script" path="res://src/FlowFieldVisualizer.gd" id="9_83565"]
 [ext_resource type="Script" path="res://src/Game.gd" id="10_gds"]
 [ext_resource type="Script" path="res://src/StructurePlacer.gd" id="10_wlmfl"]
+[ext_resource type="Script" path="res://src/ProductionControlUI.gd" id="11_prdui"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_favtp"]
 turbidity = 2.0
@@ -49,31 +50,30 @@ script = ExtResource("3_yrrol")
 script = ExtResource("1_r4x5c")
 
 [node name="FlowVisualizer" type="Node3D" parent="Map"]
+visible = false
 script = ExtResource("9_83565")
 
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
 
-[node name="MarginContainer" type="MarginContainer" parent="CanvasLayer"]
-offset_right = 40.0
-offset_bottom = 40.0
+[node name="TopLeftUI" type="VBoxContainer" parent="CanvasLayer"]
+offset_right = 300.0
+offset_bottom = 300.0
+mouse_filter = 0
 
-[node name="ResourceDisplay" type="HBoxContainer" parent="CanvasLayer/MarginContainer"]
+[node name="ResourceDisplay" type="HBoxContainer" parent="CanvasLayer/TopLeftUI"]
 layout_mode = 2
 script = ExtResource("8_hbkdh")
 
-[node name="ResourceLabel" type="Label" parent="CanvasLayer/MarginContainer/ResourceDisplay"]
+[node name="ResourceLabel" type="Label" parent="CanvasLayer/TopLeftUI/ResourceDisplay"]
 layout_mode = 2
+text = "Recources:"
 
-[node name="MarginContainer2" type="MarginContainer" parent="CanvasLayer"]
-anchors_preset = 2
-anchor_top = 1.0
-anchor_bottom = 1.0
-offset_top = -40.0
-offset_right = 40.0
-grow_vertical = 0
+[node name="ProductionControlUI" type="VBoxContainer" parent="CanvasLayer/TopLeftUI"]
+layout_mode = 2
 mouse_filter = 0
+script = ExtResource("11_prdui")
 
-[node name="BuildMenu" type="VBoxContainer" parent="CanvasLayer/MarginContainer2"]
+[node name="BuildMenu" type="VBoxContainer" parent="CanvasLayer/TopLeftUI"]
 layout_mode = 2
 mouse_filter = 0
 script = ExtResource("9_8ixy4")

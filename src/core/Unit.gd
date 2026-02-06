@@ -3,6 +3,7 @@ class_name Unit
 const HealthBar3D = preload("res://src/HealthBar3D.gd")
 const Grid = preload("res://src/core/Grid.gd")
 const Structure = preload("res://src/core/Structure.gd")
+const GameData = preload("res://data/game_data.gd")
 
 var health_bar: HealthBar3D
 var muzzle_flash: OmniLight3D
@@ -375,24 +376,31 @@ func _physics_process(delta):
 		target_destination = formation_position
 		arriving_at_formation_pos = true
 
+	# Calculate effective speed based on tile cost (higher cost = slower)
+	var tile_cost: float = 1.0
+	if is_instance_valid(current_tile):
+		if current_tile.has_road:
+			tile_cost = GameData.ROAD_CONFIG.road_tile_cost
+		else:
+			tile_cost = current_tile.cost
+	var effective_speed: float = move_speed / maxf(tile_cost, 0.1)
+
 	var movement_vector: Vector3 = target_destination - position
 	var distance_to_target: float = movement_vector.length()
-	var arrival_threshold: float = move_speed * delta
-	
+	var arrival_threshold: float = effective_speed * delta
+
 	# Check if we have arrived at the target
 	if distance_to_target < arrival_threshold:
 		position = target_destination
 		is_moving = false
-		
+
 		# Immediately check for the next move or combat upon arrival.
-		# _move_to_next_tile() will handle flow field existence and target checks.
 		_move_to_next_tile()
-		
+
 		return
 
-	# Move towards target
 	var direction: Vector3 = movement_vector.normalized()
-	position += direction * move_speed * delta
+	position += direction * effective_speed * delta
 	
 	# Rotate unit to face direction of movement
 	_rotate_to_face(direction)
