@@ -35,6 +35,7 @@ var produces_unit_type: String = ""
 var production_time: float = 0.0
 var production_timer: Timer
 var is_producing: bool = false
+var is_waiting_for_resources: bool = false
 
 # Production control toggles
 var resource_generation_enabled: bool = true
@@ -298,10 +299,19 @@ func _on_builder_spawn_timeout():
 			continue
 		if not tile.road_under_construction:
 			continue
-		if tile.road_owner_player_id != player_id:
-			continue  # Road belongs to a different player
+		if player_id not in tile.road_builders:
+			continue  # This player is not building this road
 		if tile.road_resources_pending <= 0:
 			continue  # No resources needed
+
+		# Validate that this road tile has at least one walkable neighbor (can be built from)
+		var has_walkable_neighbor = false
+		for neighbor in tile.neighbors:
+			if is_instance_valid(neighbor) and neighbor.walkable and neighbor.cost < 1e20:
+				has_walkable_neighbor = true
+				break
+		if not has_walkable_neighbor:
+			continue  # Skip roads with no walkable neighbors
 
 		var road_request = tile.get_road_resource_request()
 		if road_request <= 0:
@@ -343,29 +353,20 @@ func _on_builder_spawn_timeout():
 	var destination_tile = target_tile
 	const INF: float = 1e20
 
-	if req_type == "road":
-		# Roads are built from a neighboring tile
-		var found_neighbor = false
-		for neighbor in target_tile.neighbors:
+	if not destination_tile.walkable or destination_tile.cost >= INF:
+		var closest_neighbor = null
+		var closest_distance = INF
+		var base_coords = current_tile.get_coords()
+		for neighbor in destination_tile.neighbors:
 			if is_instance_valid(neighbor) and neighbor.walkable and neighbor.cost < INF:
-				destination_tile = neighbor
-				found_neighbor = true
-				break
-		if not found_neighbor:
-			push_warning("Base %s: No walkable neighbor found for road at %s" % [display_name, target_tile.get_coords()])
+				var neighbor_dist = base_coords.distance_to(neighbor.get_coords())
+				if neighbor_dist < closest_distance:
+					closest_distance = neighbor_dist
+					closest_neighbor = neighbor
+		if closest_neighbor == null:
+			push_warning("Base %s: No walkable neighbor found for construction target at %s" % [display_name, target_tile.get_coords()])
 			return
-	else:
-		# Structures: use the tile if walkable, otherwise find a neighbor
-		if not destination_tile.walkable or destination_tile.cost >= INF:
-			var found_neighbor = false
-			for neighbor in destination_tile.neighbors:
-				if is_instance_valid(neighbor) and neighbor.walkable and neighbor.cost < INF:
-					destination_tile = neighbor
-					found_neighbor = true
-					break
-			if not found_neighbor:
-				push_warning("Base %s: No walkable neighbor found for construction target at %s" % [display_name, target_tile.get_coords()])
-				return
+		destination_tile = closest_neighbor
 
 	# Find path
 	var path = grid.find_path(current_tile.get_coords(), destination_tile.get_coords())
@@ -567,25 +568,48 @@ func _on_resource_timer_timeout():
 
 func start_production():
 	"""
-	Sets is_producing to true and starts the production timer.
+	Checks if the owning player can afford the unit cost, deducts it, and starts the
+	production timer. If the player cannot afford the unit, waits 1 second and retries.
 	"""
-	if produces_unit_type == "":
+	if produces_unit_type.is_empty():
 		return
 
-	if produces_unit_type.is_empty():
-		push_error("Unit Producer %s: produces_unit_type is empty." % display_name)
+	var unit_config = GameData.UNIT_TYPES.get(produces_unit_type)
+	if not unit_config:
+		push_error("Unit Producer %s: unknown unit type '%s'." % [display_name, produces_unit_type])
 		return
-		
+
+	var cost: float = unit_config.get("cost", 0.0)
+	var game_node = get_parent().get_parent()
+	if is_instance_valid(game_node) and game_node.name == "Game" and cost > 0.0:
+		var player: Player = game_node.get_player(player_id)
+		if is_instance_valid(player):
+			if player.resources < cost:
+				# Not enough resources — retry after a short delay
+				is_waiting_for_resources = true
+				is_producing = false
+				production_timer.wait_time = 1.0
+				production_timer.start()
+				return
+			player.add_resources(-cost)
+
+	is_waiting_for_resources = false
 	is_producing = true
+	production_timer.wait_time = production_time
 	production_timer.start()
 	print("Structure %s (Player %d) started producing %s. Time: %f" % [display_name, player_id, produces_unit_type, production_time])
 
 func _on_production_timer_timeout():
 	"""
-	Callback when a unit is finished producing. Emits signal and restarts production.
+	Callback when a unit is finished producing (or when retrying after insufficient resources).
+	On a resource-wait retry, calls start_production() again. Otherwise emits the unit_produced
+	signal and restarts production for the next unit.
 	"""
+	if is_waiting_for_resources:
+		start_production()
+		return
+
 	if not is_producing or not unit_production_enabled or is_under_construction:
-		# If disabled, restart timer to check again later
 		if not unit_production_enabled:
 			start_production()
 		return

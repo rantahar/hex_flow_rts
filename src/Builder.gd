@@ -124,6 +124,7 @@ func _physics_process(delta):
 			tile_cost = GameData.ROAD_CONFIG.road_tile_cost
 		else:
 			tile_cost = current_tile.cost
+
 	var effective_speed: float = move_speed / maxf(tile_cost, 0.1)
 
 	var movement_vector: Vector3 = target_destination - position
@@ -159,35 +160,56 @@ func _advance_to_next_waypoint():
 		push_error("Builder: Invalid tile at waypoint %s" % next_coords)
 		return
 
-	# Try to claim formation slot on next tile
-	var new_slot = next_tile.claim_formation_slot(self)
-	if new_slot == -1:
-		# Tile full, wait and retry
-		return
+	# Builders can pass through tiles with completed structures (friendly buildings)
+	# without needing a formation slot. Only the final destination tile needs a slot.
+	var is_final_waypoint = (waypoint_index == waypoints.size() - 1)
+	var needs_formation_slot = not (is_instance_valid(next_tile.structure) and not next_tile.structure.is_under_construction)
 
-	# Release old slot
-	if formation_slot != -1 and is_instance_valid(current_tile):
-		current_tile.release_formation_slot(formation_slot)
+	if needs_formation_slot or is_final_waypoint:
+		# Try to claim formation slot on destination tiles and tiles without blocking structures
+		var new_slot = next_tile.claim_formation_slot(self)
+		if new_slot == -1:
+			# Tile full, wait and retry
+			return
 
-	formation_slot = new_slot
-	current_tile = next_tile
-	waypoint_index += 1
+		# Release old slot
+		if formation_slot != -1 and is_instance_valid(current_tile):
+			current_tile.release_formation_slot(formation_slot)
 
-	# Calculate target world position with formation offset
-	var map_node = get_parent()
-	var pos_offset_2d: Vector2 = next_tile.FORMATION_POSITIONS[new_slot]
-	var target_xz = Vector3(
-		next_tile.world_pos.x + pos_offset_2d.x,
-		0.0,
-		next_tile.world_pos.z + pos_offset_2d.y
-	)
+		formation_slot = new_slot
+		current_tile = next_tile
+		waypoint_index += 1
 
-	var ground_y: float = 0.0
-	if is_instance_valid(map_node) and map_node.has_method("get_height_at_world_pos"):
-		ground_y = map_node.get_height_at_world_pos(target_xz)
+		# Calculate target world position with formation offset
+		var map_node = get_parent()
+		var pos_offset_2d: Vector2 = next_tile.FORMATION_POSITIONS[new_slot]
+		var target_xz = Vector3(
+			next_tile.world_pos.x + pos_offset_2d.x,
+			0.0,
+			next_tile.world_pos.z + pos_offset_2d.y
+		)
 
-	formation_position = Vector3(target_xz.x, ground_y, target_xz.z)
-	target_world_pos = formation_position
+		var ground_y: float = 0.0
+		if is_instance_valid(map_node) and map_node.has_method("get_height_at_world_pos"):
+			ground_y = map_node.get_height_at_world_pos(target_xz)
+
+		formation_position = Vector3(target_xz.x, ground_y, target_xz.z)
+		target_world_pos = formation_position
+	else:
+		# Pass through tile with friendly structure (no formation slot needed)
+		current_tile = next_tile
+		waypoint_index += 1
+
+		# Just move to the center of the tile
+		var map_node = get_parent()
+		var target_xz = next_tile.world_pos
+
+		var ground_y: float = 0.0
+		if is_instance_valid(map_node) and map_node.has_method("get_height_at_world_pos"):
+			ground_y = map_node.get_height_at_world_pos(target_xz)
+
+		target_world_pos = Vector3(target_xz.x, ground_y, target_xz.z)
+
 	is_moving = true
 
 func _on_arrival():
@@ -215,6 +237,7 @@ func _on_arrival():
 	elif is_instance_valid(target_tile):
 		# Road construction: complete the road segment
 		if target_tile.road_under_construction:
+			target_tile.road_resources_in_transit -= resources_carried
 			target_tile.complete_road_construction()
 			print("Builder (Player %d): Completed road at %s" % [player_id, target_tile.get_coords()])
 		else:

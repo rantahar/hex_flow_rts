@@ -48,7 +48,7 @@ var road_visual: Node3D = null
 var road_under_construction: bool = false
 var road_resources_pending: float = 0.0
 var road_resources_in_transit: float = 0.0  # Resources being carried by builders already sent
-var road_owner_player_id: int = -1  # Player building this road (only relevant while under construction)
+var road_builders: Array[int] = []  # Player IDs building this road
 
 # Reference to an optional child node representing a drill hole
 @onready var hole_node: Node3D = $Hole
@@ -188,6 +188,7 @@ func set_road_under_construction(segment_cost: float = 0.0):
 
 func complete_road_construction():
 	road_under_construction = false
+	road_builders.clear()
 	set_road()
 
 func set_road():
@@ -370,15 +371,13 @@ func get_flow_cost(player_id: int) -> float:
 	if not walkable:
 		return INF
 
-	# Friendly structures block all movement onto the tile (under-construction allowed)
-	if structure != null and is_instance_valid(structure) and structure.player_id == player_id and not structure.is_under_construction:
-		return INF
+	# Friendly structures are passable (no extra cost) - builders can move through them freely
 
 	# 4. Base Terrain Cost + Density Cost
 
 	var total_cost: float = cost
 	var density_cost: float = 0.0
-	
+
 	# Calculate density cost based on friendly units on the tile.
 	# Note: Only units currently NOT being processed by this flow field should be counted,
 	# but for simplicity, we count all friendly units and rely on combat checks elsewhere.
@@ -386,12 +385,12 @@ func get_flow_cost(player_id: int) -> float:
 	for unit in occupied_slots:
 		if unit != null and is_instance_valid(unit) and unit.player_id == player_id:
 			friendly_unit_count += 1
-	
+
 	if friendly_unit_count > 0:
 		density_cost = friendly_unit_count * GameConfig.DENSITY_COST_MULTIPLIER
-		
+
 	total_cost += density_cost
-	
+
 	return total_cost
 
 func is_buildable_terrain() -> bool:

@@ -15,7 +15,8 @@
 - **Phase 2 (Logic Core)**: COMPLETE
 - **Phase 3 (Unit Movement)**: COMPLETE
 - **Phase 4 (Combat System)**: COMPLETE
-- **Phase 5 (Economy & Structures)**: IN PROGRESS
+- **Phase 5 (Economy & Structures)**: Almost done
+- **Phase 6 (Builder Movement Refactoring)**: IN PROGRESS
 
 # 3. Completed Systems
 
@@ -113,6 +114,10 @@
 - "Select All of Type" functionality for batch control
 - Structure attack system (cannon, artillery) - auto-attacks closest enemy tile, damages all units on tile
 
+- Implement army unit cost.
+
+- Separate builder list on tiles (currently using formations slots). Builders should be targetable and collide with enemies, but pass through full formations and 
+
 ## 3.10. Builder Unit System
 
 - Builder units spawned from base structures at regular intervals
@@ -121,6 +126,8 @@
 - Progressive resource delivery and health restoration during construction
 - Automatic despawn when construction is complete
 - Multiple builders can work on same structure simultaneously
+- **Currently**: Builders can move through tiles with completed friendly structures (temporary fix in place)
+- **Technical Debt**: Formation slots system needs refactoring to separate builder movement from military unit mechanics (Phase 6 in progress)
 
 ## 3.11. Forward Structure Deployment
 
@@ -130,7 +137,21 @@
 - Road networks enable optimized builder pathfinding to distant sites
 - Construction progresses as resources are delivered by builders
 
-## 3.12. Debug Visualization
+## 3.12. Victory & Defeat Conditions
+
+- **Victory**: Destroy all enemy bases (only completed bases count)
+- **Defeat**: All player bases destroyed
+- Game state management with three states: PLAYING, VICTORY, DEFEAT
+- Game pause on victory/defeat (all timers paused)
+- Game over overlay with appropriate title and message
+- Victory screen: Gold text "VICTORY!" with enemy destruction message
+- Defeat screen: Red text "DEFEAT" with base destruction message
+- Restart and quit functionality to manage game lifecycle
+- Input blocking during game over state
+- Base counting logic that correctly excludes under-construction bases
+- Signal system for structure destruction detection and state checking
+
+## 3.13. Debug Visualization
 
 - Flow field arrow visualization with color gradients
 - Per-player color schemes (P0: green/yellow/red, P1: blue/cyan/magenta)
@@ -232,29 +253,40 @@ game.tscn
 
 # 6. Next Development Steps
 
-## 6.1. Phase 5: Economy & Structures (Current - ~90-95% Complete)
+## 6.1. Phase 5: Economy & Structures (COMPLETE)
 
 - **Goal**: Strategic resource-based gameplay with buildings.
-- **Completed**: Resources, passive income, structure placement, build menu UI, unit production, improvement placement restrictions, production pause/resume toggles, visual selection feedback, builder units, forward structure deployment rules
-- **Missing**: Victory conditions
-- **Next Task**: Implement victory/defeat conditions (Phase 7)
+- **Completed**: Resources, passive income, structure placement, build menu UI, unit production, improvement placement restrictions, production pause/resume toggles, visual selection feedback, builder units, forward structure deployment rules, victory/defeat conditions
 
-## 6.2. Phase 6: User Interface & Control (Future)
+## 6.2. Phase 6: Builder Movement Architecture Refactoring (Current - IN PROGRESS)
 
-- Player controls for structure placement
-- Resource display UI
-- Production queue interface
+- **Goal**: Separate builder movement mechanics from military unit formation system
+- **Problem**: Current formation slots system blocks builder movement through friendly structures, causing infinite loops
+- **Current Status**: Temporary fix implemented (builders skip slots for intermediate tiles with friendly structures)
+- **Required Work**:
+  - Separate builders from `occupied_slots` into dedicated builder tracking system
+  - Modify `claim_formation_slot()` to detect builder vs unit type
+  - Update `has_enemy_units()` to only count military units
+  - Update `get_flow_cost()` to exclude builders from density calculations
+  - Remove all formation slot requirements from Builder.gd
+  - Test builder movement through complex layouts with multiple structures
+- **Next Task**: Implement full separation of builder movement from formation slot mechanics
+
+## 6.3. Phase 7: User Interface & Control (Future)
+
+- Additional UI polish and player feedback
+- Advanced selection tools
 - Upgrade menu
 - Minimap
-- Game state indicators (win/loss)
+- Additional game state indicators
 
-## 6.3. Phase 7: Victory Conditions & Game Loop (Future)
+## 6.4. Phase 8: Advanced Features (Future)
 
-- Win conditions (destroy enemy base, control territory, etc.)
-- Lose conditions (all structures destroyed, etc.)
-- Game over screen
-- Restart/new game functionality
+- Multi-player networking
 - Save/load system
+- Campaign/scenario editor
+- Replay system
+- Advanced AI behaviors
 
 # 7. Known Issues and Limitations
 
@@ -262,11 +294,10 @@ game.tscn
 
 - Debug visualization runs continuously (no toggle)
 - Hardcoded 2-player setup for testing
-- Economy system nearly complete (~90% complete)
-- No victory/defeat conditions
 - Single unit type (infantry) actively spawning
 - Limited UI (resource display, build menu, and production control)
 - No save/load system
+- **Builder Formation Slots Architecture**: Builders share formation slot system with military units, causing unnecessary constraints. Requires Phase 6 refactoring to separate mechanics. Currently mitigated with temporary fix allowing builders to bypass slots for friendly structure tiles.
 
 ## 7.2. Performance Status
 

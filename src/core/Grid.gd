@@ -22,23 +22,12 @@ func _init():
 	var W = game_data.MAP_WIDTH
 	var H = game_data.MAP_HEIGHT
 	
-	# Calculate a boundary margin based on half of the tile spacing to ensure the camera center
-	# always sees the edge tiles fully.
-	var CAMERA_MARGIN_X = X_SPACING * 0.5
-	var CAMERA_MARGIN_Z = Z_SPACING * 0.5
+	# Calculate the map boundaries.
+	MAP_X_MIN = 0.0
+	MAP_X_MAX = float(W) * X_SPACING * HEX_SCALE
+	MAP_Z_MIN = 0.0
+	MAP_Z_MAX = float(H) * Z_SPACING * HEX_SCALE
 
-	# Calculate max coordinate for tile centers:
-	# X_MAX_CENTER: Center of the right-most tile (which is offset by 0.5 in an odd row, max x=W-1)
-	var X_MAX_CENTER = (float(W) - 0.5) * X_SPACING
-	# Z_MAX_CENTER: Center of the bottom-most tile (max z=H-1)
-	var Z_MAX_CENTER = float(H - 1) * Z_SPACING
-	
-	# Apply margins to define the camera bounds (camera center position)
-	# The X and Z MIN are 0 (center of tile 0,0) minus the margin.
-	MAP_X_MIN = 0.0 - CAMERA_MARGIN_X
-	MAP_X_MAX = X_MAX_CENTER + CAMERA_MARGIN_X
-	MAP_Z_MIN = 0.0 - CAMERA_MARGIN_Z
-	MAP_Z_MAX = Z_MAX_CENTER + CAMERA_MARGIN_Z
 
 # Hex grid neighbor offsets (Odd-R offset coordinates)
 # Used to determine coordinates of neighboring tiles.

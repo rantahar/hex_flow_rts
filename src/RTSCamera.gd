@@ -82,7 +82,7 @@ func _process(delta):
 	# Movement (WASD/Arrows + Edge Scrolling)
 	_handle_movement(delta)
 
-func _input(event):
+func _unhandled_input(event):
 	"""
 	Handles various non-continuous input events like mouse clicks, mouse wheel, and middle-mouse button state changes.
 
@@ -220,17 +220,28 @@ func _handle_zoom(event):
 				
 func _clamp_position():
 	"""
-	Clamps the camera's X and Z world position to prevent it from moving outside the map boundaries.
-	Uses map boundaries retrieved from the Grid registry.
+	Clamps the camera position to keep the map visible.
+	X: clamp directly (no pitch offset on the X axis).
+	Z: clamp the projected ground center (where the camera's center ray hits y=0),
+	   then shift the camera by the same offset. This accounts for the forward pitch
+	   so the camera cannot scroll past the map edge.
 	"""
 	if map_bounds.is_empty():
 		return
-		
-	# Clamp X coordinate
+
+	# X: ground_x == position.x (camera has no left/right tilt), clamp directly
 	position.x = clamp(position.x, map_bounds.x_min, map_bounds.x_max)
-	
-	# Clamp Z coordinate
-	position.z = clamp(position.z, map_bounds.z_min, map_bounds.z_max)
+
+	# Z: camera is pitched forward, so the visible ground center is ahead of position.z.
+	# Project the center ray onto the ground plane (y=0) and clamp that point.
+	var view_dir = -transform.basis.z  # camera looks in -local Z
+	if abs(view_dir.y) > 0.001:
+		var t = -position.y / view_dir.y  # ray parameter where y == 0
+		var projected_z = position.z + t * view_dir.z
+		var clamped_z = clamp(projected_z, map_bounds.z_min, map_bounds.z_max)
+		position.z += clamped_z - projected_z
+	else:
+		position.z = clamp(position.z, map_bounds.z_min, map_bounds.z_max)
 
 func _handle_raycast_click(event):
 	"""
@@ -241,7 +252,6 @@ func _handle_raycast_click(event):
 	- event (InputEvent): The incoming input event.
 	"""
 	if event is InputEventMouseButton and (event.button_index == MOUSE_BUTTON_LEFT or event.button_index == MOUSE_BUTTON_RIGHT) and event.pressed:
-		
 		if not is_instance_valid(grid_registry):
 			push_error("Grid registry not available in RTSCamera.gd")
 			return

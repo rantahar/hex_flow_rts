@@ -62,6 +62,7 @@ mouse_filter = 0
 
 [node name="ResourceDisplay" type="HBoxContainer" parent="CanvasLayer/TopLeftUI"]
 layout_mode = 2
+mouse_filter = 0
 script = ExtResource("8_hbkdh")
 
 [node name="ResourceLabel" type="Label" parent="CanvasLayer/TopLeftUI/ResourceDisplay"]

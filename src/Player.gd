@@ -345,8 +345,9 @@ func register_road_construction(tiles: Array):
 		if not is_instance_valid(road_tile):
 			continue
 
-		# Set the owner so the base can identify who is building this road
-		road_tile.road_owner_player_id = id
+		# Add this player to the road builders list
+		if id not in road_tile.road_builders:
+			road_tile.road_builders.append(id)
 
 func _remove_builder(builder: Builder):
 	"""

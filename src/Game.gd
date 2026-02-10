@@ -401,9 +401,15 @@ func _ready() -> void:
 func _on_structure_selected(structure_type: String):
 	"""
 	Initiates structure placement mode for the human player.
+	Exits any previous placement mode before entering the new one.
 	"""
 
 	if is_instance_valid(structure_placer):
+		# Exit any previous placement mode
+		if structure_placer.is_active():
+			structure_placer.exit_placement_mode()
+
+		# Enter new placement mode
 		structure_placer.enter_placement_mode(structure_type)
 		print("Game: Entered placement mode for %s." % structure_type)
 	else:
@@ -411,6 +417,14 @@ func _on_structure_selected(structure_type: String):
 
 func _on_road_build_requested():
 	if is_instance_valid(structure_placer):
+		# Exit any previous placement/road mode
+		if structure_placer.is_active():
+			if structure_placer.road_mode:
+				structure_placer.exit_road_mode()
+			else:
+				structure_placer.exit_placement_mode()
+
+		# Enter road mode
 		structure_placer.enter_road_mode()
 		print("Game: Entered road drawing mode.")
 
