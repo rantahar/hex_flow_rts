@@ -27,6 +27,7 @@ var health: float = 20.0
 var max_health: float = 20.0
 
 var movement_timer: Timer
+var stuck_time: float = 0.0
 
 func _init(p_player_id: int, p_target_tile: Tile, p_target_structure: Structure, p_waypoints: Array[Vector2i], p_resources: float, spawn_pos: Vector3):
 	print("Builder._init: Player %d, target=%s, waypoints=%d, resources=%.1f, spawn=%s" % [p_player_id, str(p_target_tile.get_coords()) if p_target_tile else "null", p_waypoints.size(), p_resources, spawn_pos])
@@ -113,7 +114,12 @@ func _on_movement_check_timeout():
 
 func _physics_process(delta):
 	if not is_moving:
+		stuck_time += delta
+		if stuck_time >= 1.0:
+			_on_stuck()
 		return
+
+	stuck_time = 0.0
 
 	var target_destination: Vector3 = formation_position if formation_slot != -1 else target_world_pos
 
@@ -211,6 +217,31 @@ func _advance_to_next_waypoint():
 		target_world_pos = Vector3(target_xz.x, ground_y, target_xz.z)
 
 	is_moving = true
+
+func _on_stuck():
+	print("Builder (Player %d): Stuck for too long, refunding %.1f resources." % [player_id, resources_carried])
+
+	if formation_slot != -1 and is_instance_valid(current_tile):
+		current_tile.release_formation_slot(formation_slot)
+
+	# Decrement in-transit counts
+	if is_instance_valid(target_structure):
+		target_structure.resources_in_transit = maxf(0.0, target_structure.resources_in_transit - resources_carried)
+	elif is_instance_valid(target_tile):
+		target_tile.road_resources_in_transit = maxf(0.0, target_tile.road_resources_in_transit - resources_carried)
+
+	# Refund resources to player
+	var map_node = get_parent()
+	if is_instance_valid(map_node):
+		var game_node = map_node.get_parent()
+		if is_instance_valid(game_node) and game_node.name == "Game":
+			var player = game_node.get_player(player_id)
+			if is_instance_valid(player):
+				player.add_resources(resources_carried)
+				if player.has_method("_remove_builder"):
+					player._remove_builder(self)
+
+	queue_free()
 
 func _on_arrival():
 	# Release formation slot
