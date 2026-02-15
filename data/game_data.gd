@@ -7,15 +7,15 @@ const UNIT_TYPES = {
 		# User-friendly name for display
 		"display_name": "Infantry",
 		# Path to the unit's 3D mesh file (.obj, .glb, etc.)
-		"mesh_path": "res://assets/robot.obj",
+		"mesh_path": "res://assets/robot_pink.obj",
 		# Movement speed in units per second
-		"move_speed": 0.5,
+		"move_speed": 1,
 		# Radius for collision and selection, measured in hex units
 		"size": 0.08,
 		# Number of formation slots this unit occupies
 		"formation_size": 1,
 		# Maximum health points
-		"max_health": 100.0,
+		"max_health": 200.0,
 		# Damage dealt per successful attack
 		"attack_damage": 10.0,
 		# Maximum distance to attack target, measured in hex units
@@ -25,7 +25,7 @@ const UNIT_TYPES = {
 		# Maximum distance the unit can see, measured in hex units
 		"vision_range": 8.0,
 		# Resource cost to spawn this unit
-		"cost": 100,
+		"cost": 30,
 		# Tags used for unit classification and logic handling
 		"unit_types": ["military", "infantry"]
 	},
@@ -88,7 +88,7 @@ const STRUCTURE_TYPES = {
 		"cost": 150,
 		"max_health": 200,
 		"produces_unit_type": "infantry",
-		"production_time": 5.0,
+		"production_time": 2.0,
 		"production_rate_max": 1.0,
 		"category": "improvement",
 		"y_offset_fraction": 0.0
@@ -141,6 +141,7 @@ const BUILDER_CONFIG = {
 	"move_speed": 0.5,
 	"max_health": 20.0,
 	"spawn_interval": 0.5,
+	"stuck_timeout": 1.0,  # seconds before a stuck builder gives up and refunds resources
 }
 
 const ROAD_CONFIG = {
@@ -188,6 +189,12 @@ const TILES = {
 # Defines the delay before game logic starts (e.g., flow field calculation)
 const START_DELAY_SECONDS: float = 1.0
 
+# How often (seconds) each resource-generating structure ticks
+const RESOURCE_TICK_INTERVAL: float = 1.0
+
+# Retry delay (seconds) when a factory cannot afford its next unit
+const PRODUCTION_RETRY_INTERVAL: float = 1.0
+
 # Defines global map dimensions
 const MAP_WIDTH: int = 20
 const MAP_HEIGHT: int = 20
@@ -200,6 +207,8 @@ const PLAYER_CONFIGS = [
 		"color": Color.RED,
 		"starting_resources": 1000.0,
 		"type": "human",
+		"spawn_coords": Vector2i(5, 5),
+		"target_coords": Vector2i(15, 15),
 	},
 	{
 		"id": 1,
@@ -207,5 +216,7 @@ const PLAYER_CONFIGS = [
 		"color": Color.BLUE,
 		"starting_resources": 1000.0,
 		"type": "ai",
+		"spawn_coords": Vector2i(15, 15),
+		"target_coords": Vector2i(5, 5),
 	}
 ]

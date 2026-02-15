@@ -3,12 +3,12 @@ extends Node3D
 class_name MapGenerator
 
 const GameData = preload("res://data/game_data.gd")
+const GameConfig = preload("res://data/game_config.gd")
 const TILE_SCENE = preload("res://src/core/tile.tscn")
 
 
 var map_width: int = GameData.MAP_WIDTH
 var map_height: int = GameData.MAP_HEIGHT
-@export var hex_scale: float = 0.6
 
 @onready var grid: Grid = get_parent().get_node("Grid")
 
@@ -32,12 +32,12 @@ func generate_map():
 		for x in range(map_width):
 
 			# Hex position calculation (Odd-R offset logic)
-			var pos_x = float(x) * Grid.X_SPACING * hex_scale
-			var pos_z = float(z) * Grid.Z_SPACING * hex_scale
+			var pos_x = float(x) * Grid.X_SPACING * GameConfig.HEX_SCALE
+			var pos_z = float(z) * Grid.Z_SPACING * GameConfig.HEX_SCALE
 
 			# Apply Offset: If z (row) is odd, add half-spacing to pos_x
 			if z % 2 != 0:
-				pos_x += (Grid.X_SPACING * hex_scale) / 2.0
+				pos_x += (Grid.X_SPACING * GameConfig.HEX_SCALE) / 2.0
 
 			var position = Vector3(pos_x, 0, pos_z)
 
@@ -63,7 +63,7 @@ func generate_map():
 			tile_root.mesh = selected_mesh
 
 			# Scale: Set node.scale
-			tile_root.scale = Vector3.ONE * hex_scale
+			tile_root.scale = Vector3.ONE * GameConfig.HEX_SCALE
 
 			# Rotation Fix (Keep for consistency)
 			tile_root.rotation_degrees.y = 0.0

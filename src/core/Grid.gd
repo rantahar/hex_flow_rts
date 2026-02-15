@@ -2,7 +2,9 @@ extends Node
 class_name Grid
 
 # Hex grid geometry constants
-const HEX_SCALE: float = 0.6
+# HEX_SCALE is kept as a literal here because Tile.gd references it in a const chain
+# (FORMATION_RADIUS). The canonical definition to change is GameConfig.HEX_SCALE.
+const HEX_SCALE: float = 0.6  # must match GameConfig.HEX_SCALE
 const X_SPACING: float = 1.732 * 0.57735  # sqrt(3) * 0.57735
 const Z_SPACING: float = 1.5 * 0.57735
 

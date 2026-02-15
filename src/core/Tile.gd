@@ -22,6 +22,8 @@ const FORMATION_POSITIONS: Array[Vector2] = [
 ]
 # Stores Unit references in slots (null if slot is free)
 var occupied_slots: Array = [null, null, null, null, null, null]
+# Stores Builder references passing through or stationed on this tile
+var builder_occupants: Array = []
 
 # Godot's built-in infinity constant for floats
 const INF: float = 1e20
@@ -97,6 +99,12 @@ func release_formation_slot(slot_index: int):
 	"""
 	if slot_index != -1 and slot_index >= 0 and slot_index < occupied_slots.size():
 		occupied_slots[slot_index] = null
+
+func register_builder(builder: Node3D) -> void:
+	builder_occupants.append(builder)
+
+func unregister_builder(builder: Node3D) -> void:
+	builder_occupants.erase(builder)
 
 # Checks if this tile contains any units belonging to a different player.
 func has_enemy_units(player_id: int) -> bool:

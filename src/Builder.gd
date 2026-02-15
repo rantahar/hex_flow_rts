@@ -14,7 +14,6 @@ var target_structure: Structure = null  # null for road construction
 var waypoints: Array[Vector2i] = []
 var waypoint_index: int = 0
 var current_tile: Tile = null
-var formation_slot: int = -1
 var grid: Grid = null
 var mesh_instance: MeshInstance3D
 var health_bar: HealthBar3D
@@ -22,7 +21,6 @@ var scale_factor: float = 1.0
 var move_speed: float = 0.5
 var is_moving: bool = false
 var target_world_pos: Vector3 = Vector3.ZERO
-var formation_position: Vector3 = Vector3.ZERO
 var health: float = 20.0
 var max_health: float = 20.0
 
@@ -121,7 +119,7 @@ func _physics_process(delta):
 
 	stuck_time = 0.0
 
-	var target_destination: Vector3 = formation_position if formation_slot != -1 else target_world_pos
+	var target_destination: Vector3 = target_world_pos
 
 	# Effective speed based on tile cost
 	var tile_cost: float = 1.0
@@ -155,7 +153,6 @@ func _advance_to_next_waypoint():
 	if not is_instance_valid(grid):
 		return
 
-	# Check if we've reached the final destination
 	if waypoint_index >= waypoints.size():
 		_on_arrival()
 		return
@@ -166,63 +163,30 @@ func _advance_to_next_waypoint():
 		push_error("Builder: Invalid tile at waypoint %s" % next_coords)
 		return
 
-	# Builders can pass through tiles with completed structures (friendly buildings)
-	# without needing a formation slot. Only the final destination tile needs a slot.
-	var is_final_waypoint = (waypoint_index == waypoints.size() - 1)
-	var needs_formation_slot = not (is_instance_valid(next_tile.structure) and not next_tile.structure.is_under_construction)
+	# Builders are blocked only by enemy military units
+	if next_tile.has_enemy_units(player_id):
+		return
 
-	if needs_formation_slot or is_final_waypoint:
-		# Try to claim formation slot on destination tiles and tiles without blocking structures
-		var new_slot = next_tile.claim_formation_slot(self)
-		if new_slot == -1:
-			# Tile full, wait and retry
-			return
+	# Move to tile center — no formation slot needed
+	if is_instance_valid(current_tile):
+		current_tile.unregister_builder(self)
+	next_tile.register_builder(self)
+	current_tile = next_tile
+	waypoint_index += 1
 
-		# Release old slot
-		if formation_slot != -1 and is_instance_valid(current_tile):
-			current_tile.release_formation_slot(formation_slot)
+	var map_node = get_parent()
+	var ground_y: float = 0.0
+	if is_instance_valid(map_node) and map_node.has_method("get_height_at_world_pos"):
+		ground_y = map_node.get_height_at_world_pos(next_tile.world_pos)
 
-		formation_slot = new_slot
-		current_tile = next_tile
-		waypoint_index += 1
-
-		# Calculate target world position with formation offset
-		var map_node = get_parent()
-		var pos_offset_2d: Vector2 = next_tile.FORMATION_POSITIONS[new_slot]
-		var target_xz = Vector3(
-			next_tile.world_pos.x + pos_offset_2d.x,
-			0.0,
-			next_tile.world_pos.z + pos_offset_2d.y
-		)
-
-		var ground_y: float = 0.0
-		if is_instance_valid(map_node) and map_node.has_method("get_height_at_world_pos"):
-			ground_y = map_node.get_height_at_world_pos(target_xz)
-
-		formation_position = Vector3(target_xz.x, ground_y, target_xz.z)
-		target_world_pos = formation_position
-	else:
-		# Pass through tile with friendly structure (no formation slot needed)
-		current_tile = next_tile
-		waypoint_index += 1
-
-		# Just move to the center of the tile
-		var map_node = get_parent()
-		var target_xz = next_tile.world_pos
-
-		var ground_y: float = 0.0
-		if is_instance_valid(map_node) and map_node.has_method("get_height_at_world_pos"):
-			ground_y = map_node.get_height_at_world_pos(target_xz)
-
-		target_world_pos = Vector3(target_xz.x, ground_y, target_xz.z)
-
+	target_world_pos = Vector3(next_tile.world_pos.x, ground_y, next_tile.world_pos.z)
 	is_moving = true
 
 func _on_stuck():
 	print("Builder (Player %d): Stuck for too long, refunding %.1f resources." % [player_id, resources_carried])
 
-	if formation_slot != -1 and is_instance_valid(current_tile):
-		current_tile.release_formation_slot(formation_slot)
+	if is_instance_valid(current_tile):
+		current_tile.unregister_builder(self)
 
 	# Decrement in-transit counts
 	if is_instance_valid(target_structure):
@@ -244,9 +208,8 @@ func _on_stuck():
 	queue_free()
 
 func _on_arrival():
-	# Release formation slot
-	if formation_slot != -1 and is_instance_valid(current_tile):
-		current_tile.release_formation_slot(formation_slot)
+	if is_instance_valid(current_tile):
+		current_tile.unregister_builder(self)
 
 	if is_instance_valid(target_structure):
 		# Check if structure is still under construction
@@ -255,7 +218,8 @@ func _on_arrival():
 			var hp_contribution = target_structure.max_health * resources_carried / maxf(target_structure.construction_cost, 1.0)
 			target_structure.add_construction_progress(hp_contribution)
 			target_structure.resources_in_transit = maxf(0.0, target_structure.resources_in_transit - resources_carried)
-			print("Builder (Player %d): Delivered %.1f resources to %s, contributing %.1f HP (in transit now: %.1f)" % [player_id, resources_carried, target_structure.display_name, hp_contribution, target_structure.resources_in_transit])
+			target_structure.resources_pending = maxf(0.0, target_structure.resources_pending - resources_carried)
+			print("Builder (Player %d): Delivered %.1f resources to %s, contributing %.1f HP (in transit now: %.1f, pending: %.1f)" % [player_id, resources_carried, target_structure.display_name, hp_contribution, target_structure.resources_in_transit, target_structure.resources_pending])
 		else:
 			# Structure already completed - refund resources
 			var game_node = get_parent().get_parent()
@@ -300,9 +264,8 @@ func take_damage(amount: float):
 		health_bar.update_health(health, max_health)
 
 	if health <= 0:
-		# Release formation slot
-		if formation_slot != -1 and is_instance_valid(current_tile):
-			current_tile.release_formation_slot(formation_slot)
+		if is_instance_valid(current_tile):
+			current_tile.unregister_builder(self)
 
 		# Decrement resources in transit since this builder won't arrive
 		if is_instance_valid(target_structure):

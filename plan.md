@@ -15,8 +15,8 @@
 - **Phase 2 (Logic Core)**: COMPLETE
 - **Phase 3 (Unit Movement)**: COMPLETE
 - **Phase 4 (Combat System)**: COMPLETE
-- **Phase 5 (Economy & Structures)**: Almost done
-- **Phase 6 (Builder Movement Refactoring)**: IN PROGRESS
+- **Phase 5 (Economy & Structures)**: COMPLETE
+- **Phase 6 (Builder Movement Refactoring)**: COMPLETE
 
 # 3. Completed Systems
 
@@ -126,8 +126,9 @@
 - Progressive resource delivery and health restoration during construction
 - Automatic despawn when construction is complete
 - Multiple builders can work on same structure simultaneously
-- **Currently**: Builders can move through tiles with completed friendly structures (temporary fix in place)
-- **Technical Debt**: Formation slots system needs refactoring to separate builder movement from military unit mechanics (Phase 6 in progress)
+- Builders move to tile center only (no formation offsets), tracked in `Tile.builder_occupants` separate from `occupied_slots`
+- Builders pass freely through friendly structures and friendly units; blocked only by enemy military units
+- Builders never stop mid-path — they always keep moving until arrival or enemy blockage
 
 ## 3.11. Forward Structure Deployment
 
@@ -258,19 +259,14 @@ game.tscn
 - **Goal**: Strategic resource-based gameplay with buildings.
 - **Completed**: Resources, passive income, structure placement, build menu UI, unit production, improvement placement restrictions, production pause/resume toggles, visual selection feedback, builder units, forward structure deployment rules, victory/defeat conditions
 
-## 6.2. Phase 6: Builder Movement Architecture Refactoring (Current - IN PROGRESS)
+## 6.2. Phase 6: Builder Movement Architecture Refactoring (COMPLETE)
 
 - **Goal**: Separate builder movement mechanics from military unit formation system
-- **Problem**: Current formation slots system blocks builder movement through friendly structures, causing infinite loops
-- **Current Status**: Temporary fix implemented (builders skip slots for intermediate tiles with friendly structures)
-- **Required Work**:
-  - Separate builders from `occupied_slots` into dedicated builder tracking system
-  - Modify `claim_formation_slot()` to detect builder vs unit type
-  - Update `has_enemy_units()` to only count military units
-  - Update `get_flow_cost()` to exclude builders from density calculations
-  - Remove all formation slot requirements from Builder.gd
-  - Test builder movement through complex layouts with multiple structures
-- **Next Task**: Implement full separation of builder movement from formation slot mechanics
+- **Solution**: Builders now use a dedicated `builder_occupants` array on each `Tile`, fully separate from `occupied_slots`
+- **Changes**:
+  - `Tile.gd`: Added `builder_occupants: Array`, `register_builder()`, `unregister_builder()`
+  - `Builder.gd`: Removed `formation_slot` and `formation_position`; rewrote `_advance_to_next_waypoint()` to move to tile center, check `has_enemy_units()` only, and never wait on slots
+  - Military density costs and `has_enemy_units()` are unaffected by builders
 
 ## 6.3. Phase 7: User Interface & Control (Future)
 
@@ -279,25 +275,20 @@ game.tscn
 - Upgrade menu
 - Minimap
 - Additional game state indicators
+- Show unit cost (and production time) in the selection panel when a factory is selected, to help players understand resource consumption (100 resources per 5s = 20/sec per factory)
 
 ## 6.4. Phase 8: Advanced Features (Future)
 
-- Multi-player networking
-- Save/load system
-- Campaign/scenario editor
-- Replay system
+- More interesting random maps
 - Advanced AI behaviors
 
 # 7. Known Issues and Limitations
 
 ## 7.1. Current Limitations
 
-- Debug visualization runs continuously (no toggle)
 - Hardcoded 2-player setup for testing
-- Single unit type (infantry) actively spawning
 - Limited UI (resource display, build menu, and production control)
 - No save/load system
-- **Builder Formation Slots Architecture**: Builders share formation slot system with military units, causing unnecessary constraints. Requires Phase 6 refactoring to separate mechanics. Currently mitigated with temporary fix allowing builders to bypass slots for friendly structure tiles.
 
 ## 7.2. Performance Status
 
