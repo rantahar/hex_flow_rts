@@ -169,7 +169,7 @@ const TILES = {
 		"buildable": true,
 	},
 	"mountain": {
-		"mesh_path": "res://assets/kenney_3d_hex/Models/OBJ format/grass-hill.obj",
+		"mesh_path": "res://assets/kenney_3d_hex/Models/OBJ format/stone.obj",
 		"type_name": "mountain",
 		"walk_cost": 2.0,
 		"walkable": true,

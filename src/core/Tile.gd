@@ -50,7 +50,7 @@ var road_resources_pending: float = 0.0
 var road_resources_in_transit: float = 0.0  # Resources being carried by builders already sent
 var road_builders: Array[int] = []  # Player IDs building this road
 
-var hole_visual: MeshInstance3D = null
+@onready var hole_node: Node3D = $Hole
 
 # Strategic zoom dot (player-colored sphere, shown when camera is zoomed far out)
 var strategic_dot: MeshInstance3D = null
@@ -169,15 +169,16 @@ func set_overlay_tint(color: Color):
 		push_error("Tile (%d, %d): Instance is invalid, cannot set tint." % [x, z])
 		return
 		
-	# Apply tint to the Visual child (MeshInstance3D), not the invisible CSGMesh3D root
-	var visual: MeshInstance3D = get_node_or_null("Visual")
-	if not is_instance_valid(visual):
-		return
-	if not is_instance_valid(visual.material_overlay):
-		visual.material_overlay = StandardMaterial3D.new()
-		visual.material_overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		visual.material_overlay.cull_mode = BaseMaterial3D.CULL_DISABLED
-	visual.material_overlay.albedo_color = color
+	# For non-buildable tiles the visual is in a "Visual" MeshInstance3D child;
+	# for buildable tiles it is rendered by the CSGMesh3D root itself.
+	var target: GeometryInstance3D = get_node_or_null("Visual")
+	if not is_instance_valid(target):
+		target = self
+	if not is_instance_valid(target.material_overlay):
+		target.material_overlay = StandardMaterial3D.new()
+		target.material_overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		target.material_overlay.cull_mode = BaseMaterial3D.CULL_DISABLED
+	target.material_overlay.albedo_color = color
 
 func set_tile_visibility(_is_visible: bool):
 	"""
@@ -186,26 +187,9 @@ func set_tile_visibility(_is_visible: bool):
 	if is_instance_valid(self):
 		visible = _is_visible
 
-func set_hole_visibility(show_hole: bool):
-	if show_hole:
-		if not is_instance_valid(hole_visual):
-			var disc = CylinderMesh.new()
-			disc.top_radius = 0.2
-			disc.bottom_radius = 0.2
-			disc.height = 0.01
-			var mat = StandardMaterial3D.new()
-			mat.albedo_color = Color(0.05, 0.05, 0.05)
-			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			hole_visual = MeshInstance3D.new()
-			hole_visual.name = "HoleVisual"
-			hole_visual.mesh = disc
-			hole_visual.material_override = mat
-			hole_visual.position = Vector3(0.0, 0.08, 0.0)
-			add_child(hole_visual)
-	else:
-		if is_instance_valid(hole_visual):
-			hole_visual.queue_free()
-			hole_visual = null
+func set_hole_visibility(_is_visible: bool):
+	if is_instance_valid(hole_node):
+		hole_node.visible = _is_visible
 
 func set_road_under_construction(segment_cost: float = 0.0):
 	road_under_construction = true
@@ -440,18 +424,11 @@ func get_road_resource_request() -> float:
 	return maxf(0.0, road_resources_pending - road_resources_in_transit)
 
 func _ready():
-	# Ensure the Hole node is initially hidden and non-pickable,
-	# as it shouldn't interfere with tile clicks/raycasts.
-	#if is_instance_valid(hole_node):
-	#	hole_node.visible = false
-
-	#	# Ensure the visual children of the hole node are not pickable,
-	#	# as the hole node itself may not have the input_ray_pickable property.
-	#	for child in hole_node.get_children():
-	#		if child.has_method("set_input_ray_pickable"):
-	#			child.set_input_ray_pickable(false)
-
-	pass
+	if is_instance_valid(hole_node):
+		hole_node.visible = false
+		for child in hole_node.get_children():
+			if child.has_method("set_input_ray_pickable"):
+				child.set_input_ray_pickable(false)
 
 # --- Strategic Zoom ---
 

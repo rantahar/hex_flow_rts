@@ -59,26 +59,31 @@ func generate_map():
 				push_error("Failed to load Mesh resource: %s. Skipping tile." % tile_def.mesh_path)
 				continue
 
-			# CSGMesh3D root: thin manifold hex prism for collision only (invisible)
-			var hex_prism = CylinderMesh.new()
-			hex_prism.radial_segments = 6
-			hex_prism.rings = 1
-			hex_prism.top_radius = 0.5
-			hex_prism.bottom_radius = 0.5
-			hex_prism.height = 0.15
-			tile_root.mesh = hex_prism
-			tile_root.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			var invis_mat = StandardMaterial3D.new()
-			invis_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			invis_mat.albedo_color = Color(0, 0, 0, 0)
-			invis_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			tile_root.material_override = invis_mat
-
-			# MeshInstance3D child: actual visual OBJ (supports any mesh topology)
-			var visual = MeshInstance3D.new()
-			visual.name = "Visual"
-			visual.mesh = selected_mesh
-			tile_root.add_child(visual)
+			if tile_def.buildable:
+				# Buildable tiles (grass, dirt) use manifold meshes: set OBJ directly on
+				# CSGMesh3D so the Hole cylinder can carve a visible drill hole via CSG.
+				tile_root.mesh = selected_mesh
+			else:
+				# Non-buildable tiles (mountain, water) may have non-manifold meshes.
+				# Use an invisible manifold hex prism for CSG/collision and a
+				# MeshInstance3D child for the visual (bypasses the CSG bake requirement).
+				var hex_prism = CylinderMesh.new()
+				hex_prism.radial_segments = 6
+				hex_prism.rings = 1
+				hex_prism.top_radius = 0.5
+				hex_prism.bottom_radius = 0.5
+				hex_prism.height = 0.15
+				tile_root.mesh = hex_prism
+				tile_root.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				var invis_mat = StandardMaterial3D.new()
+				invis_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+				invis_mat.albedo_color = Color(0, 0, 0, 0)
+				invis_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+				tile_root.material_override = invis_mat
+				var visual = MeshInstance3D.new()
+				visual.name = "Visual"
+				visual.mesh = selected_mesh
+				tile_root.add_child(visual)
 
 			# Debug: print mesh AABB for diagnosis
 			var aabb = selected_mesh.get_aabb()
