@@ -1,14 +1,14 @@
-[gd_scene load_steps=3 format=3 uid="uid://cf4b4oyapnmyv"]
+[gd_scene format=3 uid="uid://cf4b4oyapnmyv"]
 
 [ext_resource type="ArrayMesh" uid="uid://bge3ba83iptit" path="res://assets/kenney_3d_hex/Models/OBJ format/grass.obj" id="1_um4wl"]
-[ext_resource type="Script" path="res://src/core/Tile.gd" id="2_38w87"]
+[ext_resource type="Script" uid="uid://bbcduca084121" path="res://src/core/TileBuildable.gd" id="2_38w87"]
 
-[node name="Tile" type="CSGMesh3D"]
+[node name="Tile" type="CSGMesh3D" unique_id=391825556]
 use_collision = true
 mesh = ExtResource("1_um4wl")
 script = ExtResource("2_38w87")
 
-[node name="Hole" type="CSGCylinder3D" parent="."]
+[node name="Hole" type="CSGCylinder3D" parent="." unique_id=65958312]
 visible = false
 operation = 2
 radius = 0.2

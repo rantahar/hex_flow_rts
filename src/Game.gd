@@ -313,6 +313,13 @@ func _ready() -> void:
 	Initializes players, sets targets and spawn points, calculates initial flow fields,
 	and initiates the post-ready setup after a brief delay.
 	"""
+
+	var mesh = preload("res://assets/kenney_3d_hex/Models/OBJ format/grasshill.obj")
+	var test_tile = MeshInstance3D.new()
+	test_tile.mesh = mesh
+	add_child(test_tile)
+	test_tile.position = Vector3(0, 2, 0)
+
 	# Initialize players from centralized data
 	initialize_players(GameData.PLAYER_CONFIGS)
 	

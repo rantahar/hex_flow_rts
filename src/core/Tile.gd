@@ -1,5 +1,5 @@
 class_name Tile
-extends CSGMesh3D
+extends Node3D
 
 # Preloads needed for type hinting and access to constants
 const GameConfig = preload("res://data/game_config.gd")
@@ -49,8 +49,6 @@ var road_under_construction: bool = false
 var road_resources_pending: float = 0.0
 var road_resources_in_transit: float = 0.0  # Resources being carried by builders already sent
 var road_builders: Array[int] = []  # Player IDs building this road
-
-@onready var hole_node: Node3D = $Hole
 
 # Strategic zoom dot (player-colored sphere, shown when camera is zoomed far out)
 var strategic_dot: MeshInstance3D = null
@@ -171,9 +169,9 @@ func set_overlay_tint(color: Color):
 		
 	# For non-buildable tiles the visual is in a "Visual" MeshInstance3D child;
 	# for buildable tiles it is rendered by the CSGMesh3D root itself.
-	var target: GeometryInstance3D = get_node_or_null("Visual")
+	var target: GeometryInstance3D = get_node_or_null("Visual") as GeometryInstance3D
 	if not is_instance_valid(target):
-		target = self
+		return
 	if not is_instance_valid(target.material_overlay):
 		target.material_overlay = StandardMaterial3D.new()
 		target.material_overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -186,10 +184,6 @@ func set_tile_visibility(_is_visible: bool):
 	"""
 	if is_instance_valid(self):
 		visible = _is_visible
-
-func set_hole_visibility(_is_visible: bool):
-	if is_instance_valid(hole_node):
-		hole_node.visible = _is_visible
 
 func set_road_under_construction(segment_cost: float = 0.0):
 	road_under_construction = true
@@ -422,13 +416,6 @@ func get_road_resource_request() -> float:
 	if not road_under_construction or road_resources_pending <= 0:
 		return 0.0
 	return maxf(0.0, road_resources_pending - road_resources_in_transit)
-
-func _ready():
-	if is_instance_valid(hole_node):
-		hole_node.visible = false
-		for child in hole_node.get_children():
-			if child.has_method("set_input_ray_pickable"):
-				child.set_input_ray_pickable(false)
 
 # --- Strategic Zoom ---
 

@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://c65f82naol450"]
+
+[ext_resource type="Script" uid="uid://bp1mty6abx3nb" path="res://src/core/TileSimple.gd" id="1_tilesimple"]
+
+[node name="Tile" type="MeshInstance3D"]
+script = ExtResource("1_tilesimple")

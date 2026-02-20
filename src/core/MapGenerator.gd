@@ -5,6 +5,7 @@ class_name MapGenerator
 const GameData = preload("res://data/game_data.gd")
 const GameConfig = preload("res://data/game_config.gd")
 const TILE_SCENE = preload("res://src/core/tile.tscn")
+const TILE_SIMPLE_SCENE = preload("res://src/core/tile_simple.tscn")
 
 
 var map_width: int = GameData.MAP_WIDTH
@@ -41,11 +42,6 @@ func generate_map():
 
 			var position = Vector3(pos_x, 0, pos_z)
 
-			# 3. Instantiate Tile Scene (CSGMesh3D root)
-			var tile_root = TILE_SCENE.instantiate()
-			tile_root.name = "Hex_%d_%d" % [x, z]
-			tile_root.position = position
-
 			# Mesh: Select random tile type and load resource
 			var selected_tile_key = _get_weighted_random_tile_key()
 			if selected_tile_key.is_empty():
@@ -59,31 +55,28 @@ func generate_map():
 				push_error("Failed to load Mesh resource: %s. Skipping tile." % tile_def.mesh_path)
 				continue
 
+			# 3. Instantiate the appropriate tile scene based on buildability
+			var tile_root: Node3D
 			if tile_def.buildable:
-				# Buildable tiles (grass, dirt) use manifold meshes: set OBJ directly on
-				# CSGMesh3D so the Hole cylinder can carve a visible drill hole via CSG.
-				tile_root.mesh = selected_mesh
+				# Buildable tiles use CSGMesh3D (TileBuildable) so the Hole cylinder
+				# can carve a visible drill hole via CSG boolean subtraction.
+				var csg_tile = TILE_SCENE.instantiate() as CSGMesh3D
+				csg_tile.name = "Hex_%d_%d" % [x, z]
+				csg_tile.position = position
+				csg_tile.mesh = selected_mesh
+				tile_root = csg_tile
 			else:
-				# Non-buildable tiles (mountain, water) may have non-manifold meshes.
-				# Use an invisible manifold hex prism for CSG/collision and a
-				# MeshInstance3D child for the visual (bypasses the CSG bake requirement).
-				var hex_prism = CylinderMesh.new()
-				hex_prism.radial_segments = 6
-				hex_prism.rings = 1
-				hex_prism.top_radius = 0.5
-				hex_prism.bottom_radius = 0.5
-				hex_prism.height = 0.15
-				tile_root.mesh = hex_prism
-				tile_root.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-				var invis_mat = StandardMaterial3D.new()
-				invis_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-				invis_mat.albedo_color = Color(0, 0, 0, 0)
-				invis_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-				tile_root.material_override = invis_mat
-				var visual = MeshInstance3D.new()
-				visual.name = "Visual"
-				visual.mesh = selected_mesh
-				tile_root.add_child(visual)
+				# Non-buildable tiles use a simple MeshInstance3D (TileSimple) since
+				# their meshes may be non-manifold and do not need hole drilling.
+				# create_trimesh_collision() generates a StaticBody3D child whose
+				# collision matches the actual mesh shape, so clicks land on the
+				# correct tile regardless of the mesh's height.
+				var mesh_tile = TILE_SIMPLE_SCENE.instantiate() as MeshInstance3D
+				mesh_tile.name = "Hex_%d_%d" % [x, z]
+				mesh_tile.position = position
+				mesh_tile.mesh = selected_mesh
+				mesh_tile.create_trimesh_collision()
+				tile_root = mesh_tile
 
 			# Debug: print mesh AABB for diagnosis
 			var aabb = selected_mesh.get_aabb()
@@ -113,8 +106,7 @@ func generate_map():
 			print("[MapGen]   world_aabb approx min=%s max=%s" % [world_aabb_min, world_aabb_max])
 
 			# Requirement 2: Store tile reference
-			# Since tile_root is a CSGMesh3D with Tile.gd attached, it is the Tile object itself.
-			var tile_data: Tile = tile_root
+			var tile_data: Tile = tile_root as Tile
 			tile_data.x = x
 			tile_data.z = z
 			tile_data.world_pos = position
@@ -129,8 +121,7 @@ func generate_map():
 
 	# After all tiles are added to scene tree, update their Y positions to match actual terrain height
 	_update_tile_heights()
-	# Deferred check: CSG bakes on the next frame, so check after that
-	call_deferred("_debug_check_csg_bakes")
+
 
 func _update_tile_heights() -> void:
 	"""
@@ -173,11 +164,9 @@ func _get_weighted_random_tile_key() -> String:
 	- String: The key of the randomly selected tile type, or "" on error.
 	"""
 	var weighted_list = []
-	var total_weight = 0
 
 	for key in GameData.TILES:
 		var weight = GameData.TILES[key].get("weight", 1) # Default weight of 1 if not specified
-		total_weight += weight
 		for _i in range(weight):
 			weighted_list.append(key)
 
@@ -187,17 +176,3 @@ func _get_weighted_random_tile_key() -> String:
 
 	# Randomly pick an element from the weighted list
 	return weighted_list.pick_random()
-
-func _debug_check_csg_bakes() -> void:
-	for coords in generated_tiles:
-		var tile: Tile = generated_tiles[coords]
-		if not is_instance_valid(tile):
-			continue
-		var meshes = tile.get_meshes()
-		var mesh_path = tile.mesh.resource_path if tile.mesh else "null"
-		if meshes.is_empty():
-			print("[MapGen CSG] BAKE FAILED at (%d,%d) mesh=%s" % [coords.x, coords.y, mesh_path])
-		else:
-			var surfaces = meshes[1].get_surface_count() if meshes.size() > 1 else -1
-			var status = "EMPTY" if surfaces == 0 else "ok"
-			print("[MapGen CSG] %s at (%d,%d) surfaces=%d mesh=%s" % [status, coords.x, coords.y, surfaces, mesh_path])
