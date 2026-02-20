@@ -13,11 +13,14 @@ var selected_structures: Array[Structure] = []
 @onready var production_toggle: CheckButton
 
 var info_panel: PanelContainer
-var structure_image: TextureRect
 var name_label: Label
 var stats_label: Label
 var production_progress: ProgressBar
 var _info_structure: Structure = null
+var _preview_viewport: SubViewport
+var _preview_camera: Camera3D
+var _orbit_angle: float = 0.0
+const ORBIT_SPEED: float = 0.4  # rad/s (~15.7s per revolution)
 
 func _ready():
 	# Create UI elements
@@ -27,6 +30,9 @@ func _ready():
 	game_node = get_tree().get_root().find_child("Game", true, false)
 	if game_node and game_node.has_signal("selection_changed"):
 		game_node.selection_changed.connect(_on_selection_changed)
+
+	# Share the main scene's World3D so _preview_camera sees the actual 3D structures
+	_preview_viewport.world_3d = get_viewport().world_3d
 
 func _create_ui():
 	"""
@@ -38,17 +44,25 @@ func _create_ui():
 	info_panel.visible = false
 	add_child(info_panel)
 
-	var hbox = HBoxContainer.new()
-	info_panel.add_child(hbox)
-
-	structure_image = TextureRect.new()
-	structure_image.name = "StructureImage"
-	structure_image.custom_minimum_size = Vector2(64, 64)
-	structure_image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	hbox.add_child(structure_image)
-
 	var info_vbox = VBoxContainer.new()
-	hbox.add_child(info_vbox)
+	info_panel.add_child(info_vbox)
+
+	# Create SubViewport for 3D mesh preview
+	_preview_viewport = SubViewport.new()
+	_preview_viewport.size = Vector2i(96, 96)
+	_preview_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_preview_viewport.transparent_bg = true
+
+	# Camera for viewport — position set dynamically when a structure is selected
+	_preview_camera = Camera3D.new()
+	_preview_viewport.add_child(_preview_camera)
+
+	# Wrap viewport in container
+	var viewport_container = SubViewportContainer.new()
+	viewport_container.custom_minimum_size = Vector2(96, 96)
+	viewport_container.stretch = true
+	viewport_container.add_child(_preview_viewport)
+	info_vbox.add_child(viewport_container)
 
 	name_label = Label.new()
 	name_label.name = "NameLabel"
@@ -57,7 +71,6 @@ func _create_ui():
 
 	stats_label = Label.new()
 	stats_label.name = "StatsLabel"
-	stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	info_vbox.add_child(stats_label)
 
 	# --- Production progress bar ---
@@ -160,38 +173,30 @@ func _update_structure_info(structure: Structure):
 	"""
 	Populates the info panel for a single selected structure.
 	"""
-	# Load texture from mesh path
-	var mesh_path = structure.config.get("mesh_path", "")
-	if mesh_path != "":
-		var texture_path = mesh_path.replace(".obj", ".png")
-		var tex = load(texture_path)
-		structure_image.texture = tex
-	else:
-		structure_image.texture = null
+	_info_structure = structure
+	_orbit_angle = 0.0
+	_update_preview_camera(structure)
 
 	name_label.text = structure.display_name
 
 	# Build stats string
 	var stats := ""
-	if structure.produces_unit_type != "":
+	if structure.is_under_construction:
+		stats = "under construction"
+	elif structure.produces_unit_type != "":
 		var unit_data = GameData.UNIT_TYPES.get(structure.produces_unit_type, {})
 		var unit_display = unit_data.get("display_name", structure.produces_unit_type)
 		var cost = unit_data.get("cost", 0)
-		var state_str := "Idle"
 		if structure.is_waiting_for_resources:
-			state_str = "Waiting..."
+			stats = "waiting for resources"
 		elif structure.is_producing:
-			state_str = "Producing"
-		stats = "Produces: %s\nCost: %d\n%s" % [unit_display, cost, state_str]
+			stats = "producing: %s (%d)" % [unit_display.to_lower(), cost]
+		else:
+			stats = "idle"
 	elif structure.resource_generation_rate > 0 and structure.attack_damage == 0:
-		stats = "Resources: +%d/sec" % int(structure.resource_generation_rate)
+		stats = "resources: +%d/sec" % int(structure.resource_generation_rate)
 	elif structure.attack_damage > 0:
-		stats = "Damage: %d\nRange: %d hex" % [structure.attack_damage, structure.attack_range_hex]
-
-	if structure.is_under_construction:
-		if stats != "":
-			stats += "\n"
-		stats += "Under Construction"
+		stats = "damage: %d · range: %d" % [structure.attack_damage, structure.attack_range_hex]
 
 	stats_label.text = stats
 
@@ -199,19 +204,47 @@ func _update_structure_info(structure: Structure):
 	var is_factory = structure.produces_unit_type != ""
 	production_progress.visible = is_factory
 
-	_info_structure = structure
+func _update_preview_camera(structure: Structure) -> void:
+	if not is_instance_valid(structure) or not is_instance_valid(_preview_camera):
+		return
 
-func _process(_delta):
-	if _info_structure == null or _info_structure.produces_unit_type == "":
+	var structure_height: float = structure.get_structure_height()
+	var world_radius: float = 0.0
+	if is_instance_valid(structure.mesh_instance) and structure.mesh_instance.mesh:
+		var aabb: AABB = structure.mesh_instance.mesh.get_aabb()
+		world_radius = maxf(aabb.size.x, aabb.size.z) * structure.scale_factor / 2.0
+
+	var bounding_radius: float = maxf(structure_height / 2.0, world_radius)
+	var fov_rad: float = deg_to_rad(_preview_camera.fov / 2.0)
+	var camera_distance: float = clampf((bounding_radius / tan(fov_rad)) * 1.5, 0.3, 5.0)
+
+	var target_pos: Vector3 = structure.global_position + Vector3(0.0, structure_height * 0.5, 0.0)
+
+	var elev: float = deg_to_rad(30.0)
+	_preview_camera.global_position = target_pos + Vector3(
+		cos(_orbit_angle) * camera_distance * cos(elev),
+		camera_distance * sin(elev),
+		sin(_orbit_angle) * camera_distance * cos(elev)
+	)
+	_preview_camera.look_at(target_pos, Vector3.UP)
+
+func _process(delta: float):
+	if _info_structure == null:
 		return
 	if not is_instance_valid(_info_structure):
 		_info_structure = null
+		info_panel.visible = false
 		return
-	if _info_structure.is_producing and is_instance_valid(_info_structure.production_timer):
-		var t = _info_structure.production_timer
-		production_progress.value = (1.0 - t.time_left / t.wait_time) * 100.0
-	else:
-		production_progress.value = 0.0
+
+	if _info_structure.produces_unit_type != "":
+		if _info_structure.is_producing and is_instance_valid(_info_structure.production_timer):
+			var t = _info_structure.production_timer
+			production_progress.value = (1.0 - t.time_left / t.wait_time) * 100.0
+		else:
+			production_progress.value = 0.0
+
+	_orbit_angle = fmod(_orbit_angle + ORBIT_SPEED * delta, TAU)
+	_update_preview_camera(_info_structure)
 
 func _on_select_all_pressed():
 	"""
