@@ -17,6 +17,8 @@
 - **Phase 4 (Combat System)**: COMPLETE
 - **Phase 5 (Economy & Structures)**: COMPLETE
 - **Phase 6 (Builder Movement Refactoring)**: COMPLETE
+- **Phase 7 (UI & Structure Info Panel)**: IN PROGRESS
+- **Phase 8 (Map & AI — Required Before Publishing)**: PENDING
 
 # 3. Completed Systems
 
@@ -36,6 +38,7 @@
 - Raycast-based tile selection using `PhysicsRayQueryParameters3D`
 - Emits `hex_clicked` signal with `Tile` object
 - Click detection works across multiple tile heights
+- Strategic zoom: seamless transition to high-altitude overview for broad map awareness
 
 ## 3.3. Grid System (Phase 2)
 
@@ -273,14 +276,18 @@ game.tscn
 - Additional UI polish and player feedback
 - Advanced selection tools
 - Upgrade menu
-- Minimap
 - Additional game state indicators
-- Show unit cost (and production time) in the selection panel when a factory is selected, to help players understand resource consumption (100 resources per 5s = 20/sec per factory)
+- **Structure info panel**: When a structure is selected, display a dedicated info panel showing:
+  - A small camera view or sprite of the structure
+  - Structure name and type
+  - Unit production cost and production time (e.g. "100 resources / 5s = 20/sec") for factories
+  - Current health and status
+  - This applies to all structure types, not just factories
 
-## 6.4. Phase 8: Advanced Features (Future)
+## 6.4. Phase 8: Map & AI (Required Before Publishing)
 
-- More interesting random maps
-- Advanced AI behaviors
+- **Map generator improvements**: More varied and interesting procedural maps — varied terrain distribution, choke points, resource placement strategy, visual variety
+- **AI improvements**: More capable and varied AI behaviors — better build order decisions, strategic structure placement, adaptive responses to player actions
 
 # 7. Known Issues and Limitations
 

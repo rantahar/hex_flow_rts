@@ -1,15 +1,15 @@
-[gd_scene load_steps=14 format=3 uid="uid://cmri410y4al53"]
+[gd_scene format=3 uid="uid://cmri410y4al53"]
 
-[ext_resource type="Script" path="res://src/RTSCamera.gd" id="1_i1nf2"]
-[ext_resource type="Script" path="res://src/core/MapGenerator.gd" id="1_r4x5c"]
-[ext_resource type="Script" path="res://src/core/map.gd" id="2_ie3hc"]
-[ext_resource type="Script" path="res://src/core/Grid.gd" id="3_yrrol"]
-[ext_resource type="Script" path="res://src/ResourceDisplay.gd" id="8_hbkdh"]
-[ext_resource type="Script" path="res://src/BuildMenu.gd" id="9_8ixy4"]
-[ext_resource type="Script" path="res://src/FlowFieldVisualizer.gd" id="9_83565"]
-[ext_resource type="Script" path="res://src/Game.gd" id="10_gds"]
-[ext_resource type="Script" path="res://src/StructurePlacer.gd" id="10_wlmfl"]
-[ext_resource type="Script" path="res://src/ProductionControlUI.gd" id="11_prdui"]
+[ext_resource type="Script" uid="uid://chwauohw3sslm" path="res://src/RTSCamera.gd" id="1_i1nf2"]
+[ext_resource type="Script" uid="uid://b6r6i1ikd4iq8" path="res://src/core/MapGenerator.gd" id="1_r4x5c"]
+[ext_resource type="Script" uid="uid://dbnxb861paou1" path="res://src/core/map.gd" id="2_ie3hc"]
+[ext_resource type="Script" uid="uid://ck8sauior4r0h" path="res://src/core/Grid.gd" id="3_yrrol"]
+[ext_resource type="Script" uid="uid://qy1giwhkfq00" path="res://src/ResourceDisplay.gd" id="8_hbkdh"]
+[ext_resource type="Script" uid="uid://dm787tm7f34sh" path="res://src/BuildMenu.gd" id="9_8ixy4"]
+[ext_resource type="Script" uid="uid://bpqy08siynltc" path="res://src/FlowFieldVisualizer.gd" id="9_83565"]
+[ext_resource type="Script" uid="uid://cgstc6q2xkqf" path="res://src/Game.gd" id="10_gds"]
+[ext_resource type="Script" uid="uid://c1xvyd36wmgbo" path="res://src/StructurePlacer.gd" id="10_wlmfl"]
+[ext_resource type="Script" uid="uid://s33ly4e1nbns" path="res://src/ProductionControlUI.gd" id="11_prdui"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_favtp"]
 turbidity = 2.0
@@ -26,58 +26,58 @@ sky = SubResource("Sky_jdfr1")
 ambient_light_source = 3
 ambient_light_color = Color(1, 1, 1, 1)
 
-[node name="Game" type="Node3D"]
+[node name="Game" type="Node3D" unique_id=626281759]
 script = ExtResource("10_gds")
 
-[node name="Camera3D" type="Camera3D" parent="." node_paths=PackedStringArray("grid_registry")]
+[node name="Camera3D" type="Camera3D" parent="." unique_id=1291697198 node_paths=PackedStringArray("grid_registry")]
 transform = Transform3D(1, 0, 0, 0, 0.573577, 0.819152, 0, -0.819152, 0.573577, 0, 10, 10)
 script = ExtResource("1_i1nf2")
 grid_registry = NodePath("../Map/Grid")
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=362562747]
 environment = SubResource("Environment_lhbmm")
 
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1991694349]
 transform = Transform3D(1, 0, 0, 0, 0.573576, 0.819152, 0, -0.819152, 0.573576, 0, 30, 30)
 
-[node name="Map" type="Node3D" parent="."]
+[node name="Map" type="Node3D" parent="." unique_id=1792471790]
 script = ExtResource("2_ie3hc")
 
-[node name="Grid" type="Node3D" parent="Map"]
+[node name="Grid" type="Node3D" parent="Map" unique_id=1647086001]
 script = ExtResource("3_yrrol")
 
-[node name="MapGenerator" type="Node3D" parent="Map"]
+[node name="MapGenerator" type="Node3D" parent="Map" unique_id=976041381]
 script = ExtResource("1_r4x5c")
 
-[node name="FlowVisualizer" type="Node3D" parent="Map"]
+[node name="FlowVisualizer" type="Node3D" parent="Map" unique_id=1114778465]
 visible = false
 script = ExtResource("9_83565")
 
-[node name="CanvasLayer" type="CanvasLayer" parent="."]
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=2048460749]
 
-[node name="TopLeftUI" type="VBoxContainer" parent="CanvasLayer"]
+[node name="TopLeftUI" type="VBoxContainer" parent="CanvasLayer" unique_id=122472090]
 offset_right = 300.0
 offset_bottom = 300.0
 mouse_filter = 0
 
-[node name="ResourceDisplay" type="HBoxContainer" parent="CanvasLayer/TopLeftUI"]
+[node name="ResourceDisplay" type="HBoxContainer" parent="CanvasLayer/TopLeftUI" unique_id=1878702526]
 layout_mode = 2
 mouse_filter = 0
 script = ExtResource("8_hbkdh")
 
-[node name="ResourceLabel" type="Label" parent="CanvasLayer/TopLeftUI/ResourceDisplay"]
+[node name="ResourceLabel" type="Label" parent="CanvasLayer/TopLeftUI/ResourceDisplay" unique_id=2031360051]
 layout_mode = 2
 text = "Recources:"
 
-[node name="ProductionControlUI" type="VBoxContainer" parent="CanvasLayer/TopLeftUI"]
+[node name="ProductionControlUI" type="VBoxContainer" parent="CanvasLayer/TopLeftUI" unique_id=968789491]
 layout_mode = 2
 mouse_filter = 0
 script = ExtResource("11_prdui")
 
-[node name="BuildMenu" type="VBoxContainer" parent="CanvasLayer/TopLeftUI"]
+[node name="BuildMenu" type="VBoxContainer" parent="CanvasLayer/TopLeftUI" unique_id=1608013301]
 layout_mode = 2
 mouse_filter = 0
 script = ExtResource("9_8ixy4")
 
-[node name="StructurePlacer" type="Node3D" parent="."]
+[node name="StructurePlacer" type="Node3D" parent="." unique_id=2021091024]
 script = ExtResource("10_wlmfl")

@@ -57,8 +57,9 @@ const CAMERA_STEP_SIZE: float = 0.05       # Pan speed coefficient
 const CAMERA_EDGE_THRESHOLD: float = 20.0  # Pixels from edge that trigger edge-scroll
 const CAMERA_ZOOM_SPEED: float = 0.5       # Zoom speed per scroll tick
 const CAMERA_ZOOM_MIN: float = 1.0         # Minimum camera height (most zoomed in)
-const CAMERA_ZOOM_MAX: float = 50.0        # Maximum camera height (most zoomed out)
-const CAMERA_ZOOM_START: float = 40.0      # Initial camera height
+const CAMERA_ZOOM_MAX: float = 30.0        # Maximum camera height (most zoomed out)
+const CAMERA_ZOOM_START: float = 2.0      # Initial camera height
+const CAMERA_ZOOM_STRATEGIC: float = 5.0  # Height threshold for strategic view
 const CAMERA_RESET_PITCH: float = 55.0     # Degrees — pitch angle used in reset_to()
 
 # --- Raycasting ---

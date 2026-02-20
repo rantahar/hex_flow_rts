@@ -2,22 +2,17 @@ extends Camera3D
  
 # Signals
 signal hex_clicked(tile: Tile, button_index: int)
- 
+signal strategic_zoom_changed(is_strategic: bool)
+
 # Dependencies
+const GameConfig = preload("res://data/game_config.gd")
 @export var grid_registry: Grid
 
-# Constants
-const STEP_SIZE = 0.05
-const EDGE_THRESHOLD = 20.0
-const ZOOM_SPEED = 0.5
-const ZOOM_MIN = 1.0
-const ZOOM_MAX = 50.0
-const ZOOM_START = 40.0
- 
 # State variables
 var is_middle_mouse_down: bool = false
 var last_mouse_position: Vector2 = Vector2.ZERO
 var map_bounds: Dictionary = {}
+var _is_strategic_zoom: bool = false
  
 func _ready():
 	"""
@@ -41,8 +36,10 @@ func _ready():
 	# Ensure the camera is set up for 3D navigation
 	# Using 'ui' actions for movement, ensure they are mapped in Project Settings -> Input Map
 	make_current()
+	position.y = GameConfig.CAMERA_ZOOM_START
+	_check_strategic_zoom()
 
-func reset_to(tile: Tile, camera_height: float = 2.0) -> void:
+func reset_to(tile: Tile, camera_height: float = GameConfig.CAMERA_ZOOM_START) -> void:
 	"""
 	Resets the camera to look at a tile at ground level.
 	Positions the camera at the specified height such that a downward-looking ray
@@ -58,7 +55,7 @@ func reset_to(tile: Tile, camera_height: float = 2.0) -> void:
 
 	# Calculate horizontal distance using tan(55°) ≈ 1.428
 	# distance = height / tan(angle)
-	var pitch_angle_degrees = 55.0
+	var pitch_angle_degrees = GameConfig.CAMERA_RESET_PITCH
 	var pitch_angle_radians = deg_to_rad(pitch_angle_degrees)
 	var horizontal_distance = camera_height / tan(pitch_angle_radians)
 
@@ -125,14 +122,14 @@ func _handle_movement(delta: float):
 	# Edge Scrolling
 	var mouse_pos_vp = viewport.get_mouse_position()
 
-	if mouse_pos_vp.x < EDGE_THRESHOLD:
+	if mouse_pos_vp.x < GameConfig.CAMERA_EDGE_THRESHOLD:
 		direction -= transform.basis.x
-	elif mouse_pos_vp.x > viewport_size.x - EDGE_THRESHOLD:
+	elif mouse_pos_vp.x > viewport_size.x - GameConfig.CAMERA_EDGE_THRESHOLD:
 		direction += transform.basis.x
 
-	if mouse_pos_vp.y < EDGE_THRESHOLD:
+	if mouse_pos_vp.y < GameConfig.CAMERA_EDGE_THRESHOLD:
 		direction -= transform.basis.z
-	elif mouse_pos_vp.y > viewport_size.y - EDGE_THRESHOLD:
+	elif mouse_pos_vp.y > viewport_size.y - GameConfig.CAMERA_EDGE_THRESHOLD:
 		direction += transform.basis.z
 
 	# Apply movement if any direction is pressed/active
@@ -142,7 +139,7 @@ func _handle_movement(delta: float):
 		
 		# Normalize and scale movement vector
 		# Calculate dynamic speed based on position.y to maintain constant screen-space movement regardless of zoom.
-		var dynamic_speed = STEP_SIZE * position.y
+		var dynamic_speed = GameConfig.CAMERA_STEP_SIZE * position.y
 		
 		# Multiplying by 60.0 ensures movement is frame-rate independent and matches typical physics update rate
 		var final_direction = direction.normalized() * dynamic_speed * delta * 60.0
@@ -172,7 +169,7 @@ func _handle_middle_mouse_drag(event):
 		var delta_mouse = current_mouse_position - last_mouse_position
 		
 		# Panning sensitivity. Scale by position.y to maintain constant screen-space drag sensitivity regardless of zoom.
-		var pan_speed = STEP_SIZE * 0.1 * position.y
+		var pan_speed = GameConfig.CAMERA_STEP_SIZE * 0.1 * position.y
 
 		# Translate the camera based on mouse movement (inverse direction for drag)
 		# Pan in camera X direction (sideways)
@@ -193,7 +190,7 @@ func _handle_middle_mouse_drag(event):
 func _handle_zoom(event):
 	"""
 	Handles camera zooming (moving along the view vector) using the mouse wheel.
-	The camera's Y position is clamped within defined ZOOM_MIN and ZOOM_MAX limits.
+	The camera's Y position is clamped within defined GameConfig.CAMERA_ZOOM_MIN and GameConfig.CAMERA_ZOOM_MAX limits.
 
 	Arguments:
 	- event (InputEvent): The incoming input event.
@@ -206,18 +203,25 @@ func _handle_zoom(event):
 			zoom_delta = 1.0 # Zoom out
 		
 		if zoom_delta != 0.0:
-			var zoom_vector = transform.basis.z * ZOOM_SPEED * zoom_delta
+			var zoom_vector = transform.basis.z * GameConfig.CAMERA_ZOOM_SPEED * zoom_delta
 			var new_position = position + zoom_vector
-			
+
 			# Clamp zoom based on Y position (assuming camera is pitched down)
-			if new_position.y >= ZOOM_MIN and new_position.y <= ZOOM_MAX:
+			if new_position.y >= GameConfig.CAMERA_ZOOM_MIN and new_position.y <= GameConfig.CAMERA_ZOOM_MAX:
 				position = new_position
 			# Ensure we respect the limits if we try to zoom past them
-			elif new_position.y < ZOOM_MIN:
-				position.y = ZOOM_MIN
-			elif new_position.y > ZOOM_MAX:
-				position.y = ZOOM_MAX
+			elif new_position.y < GameConfig.CAMERA_ZOOM_MIN:
+				position.y = GameConfig.CAMERA_ZOOM_MIN
+			elif new_position.y > GameConfig.CAMERA_ZOOM_MAX:
+				position.y = GameConfig.CAMERA_ZOOM_MAX
+			_check_strategic_zoom()
 				
+func _check_strategic_zoom() -> void:
+	var new_state: bool = position.y >= GameConfig.CAMERA_ZOOM_STRATEGIC
+	if new_state != _is_strategic_zoom:
+		_is_strategic_zoom = new_state
+		emit_signal("strategic_zoom_changed", _is_strategic_zoom)
+
 func _clamp_position():
 	"""
 	Clamps the camera position to keep the map visible.
@@ -260,7 +264,7 @@ func _handle_raycast_click(event):
 		
 		# Get ray origin and direction from the camera
 		var ray_origin = project_ray_origin(mouse_pos_vp)
-		var ray_end = ray_origin + project_ray_normal(mouse_pos_vp) * 1000.0 # Ray length of 1000 units
+		var ray_end = ray_origin + project_ray_normal(mouse_pos_vp) * GameConfig.RAYCAST_LENGTH
 		
 		# Create ray query parameters
 		var space = get_world_3d().space
@@ -277,11 +281,9 @@ func _handle_raycast_click(event):
 		if result:
 			# Get collision object data
 			var collider = result.collider
-			var position = result.position
 			
 			# We need to find the registered Tile ancestor.
 			var current_node: Node = collider
-			var tile_node: Tile = null # Changed type hint
 			var tile_coords: Vector2i = Vector2i(-1, -1)
 			
 			# Traverse up the tree until a registered node is found or we reach the root of the map generation.
@@ -289,7 +291,6 @@ func _handle_raycast_click(event):
 				if current_node is Tile: # Check for Tile class instead of StaticBody3D
 					tile_coords = grid_registry.find_tile_by_node(current_node)
 					if tile_coords != Vector2i(-1, -1):
-						tile_node = current_node
 						break
 				
 				# Optimization: Stop searching if we hit the top-level scene/map node

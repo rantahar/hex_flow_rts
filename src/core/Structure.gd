@@ -5,11 +5,6 @@ signal unit_produced(unit_type: String, structure: Structure)
 signal destroyed(structure: Structure)
 
 const HealthBar3D = preload("res://src/HealthBar3D.gd")
-const Grid = preload("res://src/core/Grid.gd")
-# We assume the Game script is necessary to interact with Player resources/unit creation
-const Game = preload("res://src/Game.gd")
-const Player = preload("res://src/Player.gd") # Assuming Player class is defined here
-const Tile = preload("res://src/core/Tile.gd") # Assuming Tile class is defined here
 
 var health_bar: HealthBar3D
 var config: Dictionary = {}
@@ -368,10 +363,10 @@ func _on_builder_spawn_timeout():
 			return
 		destination_tile = closest_neighbor
 
-	# Find path
-	var path = grid.find_path(current_tile.get_coords(), destination_tile.get_coords())
+	# Find path (walkable-only: builders cannot cross water without a road)
+	var path = grid.find_path(current_tile.get_coords(), destination_tile.get_coords(), true)
 	if path.is_empty():
-		push_warning("Base %s: No path to construction target at %s" % [display_name, destination_tile.get_coords()])
+		push_warning("Base %s: No walkable path to construction target at %s" % [display_name, destination_tile.get_coords()])
 		return
 	# Always remove the starting tile (base position) from the path
 	if path.size() > 0:
@@ -462,6 +457,10 @@ func _complete_construction():
 	# Newly completed bases get a builder spawn timer
 	if config.get("category") == "base":
 		_setup_builder_spawn_timer()
+
+	# Refresh tile strategic dot now that this structure is fully placed
+	if is_instance_valid(current_tile):
+		current_tile._refresh_strategic_dot()
 
 # --- Attack Logic ---
 
@@ -610,8 +609,6 @@ func _on_production_timer_timeout():
 		return
 
 	if not is_producing or not unit_production_enabled or is_under_construction:
-		if not unit_production_enabled:
-			start_production()
 		return
 
 	is_producing = false
@@ -665,6 +662,10 @@ func take_damage(amount: float):
 				
 			current_tile.structure = null
 
+		# Refresh tile strategic dot (tile is now unoccupied by this structure)
+		if current_tile != null:
+			current_tile._refresh_strategic_dot()
+
 		# Emit destruction signal before cleanup
 		emit_signal("destroyed", self)
 
@@ -684,6 +685,11 @@ func _ready():
 		grid = map_node.get_node("Grid")
 
 	_correct_height()
+
+	# Apply current strategic zoom state
+	var game_node = get_parent().get_parent()
+	if is_instance_valid(game_node) and game_node.has_method("get_strategic_zoom"):
+		set_strategic_zoom(game_node.get_strategic_zoom())
 
 
 func get_structure_height() -> float:
@@ -714,6 +720,12 @@ func _correct_height():
 
 # --- Production Control Methods ---
 
+func set_strategic_zoom(is_strategic: bool) -> void:
+	if is_instance_valid(mesh_instance):
+		mesh_instance.visible = not is_strategic
+	if is_instance_valid(health_bar):
+		health_bar.visible = not is_strategic
+
 func toggle_resource_generation():
 	"""
 	Toggles resource generation on/off.
@@ -727,6 +739,8 @@ func toggle_unit_production():
 	"""
 	unit_production_enabled = not unit_production_enabled
 	print("Structure %s: Unit production %s" % [display_name, "enabled" if unit_production_enabled else "disabled"])
+	if unit_production_enabled and not is_producing and not is_waiting_for_resources:
+		start_production()
 
 func set_selected(selected: bool):
 	"""

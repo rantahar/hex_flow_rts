@@ -7,9 +7,6 @@ signal resources_updated(new_resources: float)
 @export var id: int
 const GameData = preload("res://data/game_data.gd")
 const GameConfig = preload("res://data/game_config.gd")
-const Structure = preload("res://src/core/Structure.gd")
-const Tile = preload("res://src/core/Tile.gd")
-const Builder = preload("res://src/Builder.gd")
 
 # Required for Game.gd initialization logic
 var color: Color = Color.WHITE
@@ -69,8 +66,6 @@ func spawn_unit(hex_x: int = -1, hex_z: int = -1, map_node: Node3D = null, unit_
 		push_error("Player.spawn_unit: Invalid or non-walkable tile provided/determined.")
 		return null
 	
-	var coords = tile_to_spawn_on.get_coords()
-
 	if not map_node:
 		push_error("Player.spawn_unit: Map node is null")
 		return null

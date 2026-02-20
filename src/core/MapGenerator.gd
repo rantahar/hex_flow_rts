@@ -59,11 +59,33 @@ func generate_map():
 				push_error("Failed to load Mesh resource: %s. Skipping tile." % tile_def.mesh_path)
 				continue
 
-			# Set mesh on the root node (CSGMesh3D)
-			tile_root.mesh = selected_mesh
+			# CSGMesh3D root: thin manifold hex prism for collision only (invisible)
+			var hex_prism = CylinderMesh.new()
+			hex_prism.radial_segments = 6
+			hex_prism.rings = 1
+			hex_prism.top_radius = 0.5
+			hex_prism.bottom_radius = 0.5
+			hex_prism.height = 0.15
+			tile_root.mesh = hex_prism
+			tile_root.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			var invis_mat = StandardMaterial3D.new()
+			invis_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			invis_mat.albedo_color = Color(0, 0, 0, 0)
+			invis_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			tile_root.material_override = invis_mat
+
+			# MeshInstance3D child: actual visual OBJ (supports any mesh topology)
+			var visual = MeshInstance3D.new()
+			visual.name = "Visual"
+			visual.mesh = selected_mesh
+			tile_root.add_child(visual)
+
+			# Debug: print mesh AABB for diagnosis
+			var aabb = selected_mesh.get_aabb()
+			print("[MapGen] tile=%s key=%s mesh=%s aabb=%s" % [tile_root.name, selected_tile_key, tile_def.mesh_path, aabb])
 
 			# Scale: Set node.scale
-			tile_root.scale = Vector3.ONE * GameConfig.HEX_SCALE
+			tile_root.scale = Vector3.ONE * GameConfig.HEX_SCALE * 0.9
 
 			# Rotation Fix (Keep for consistency)
 			tile_root.rotation_degrees.y = 0.0
@@ -71,7 +93,19 @@ func generate_map():
 			# Add to the scene tree (parent MapGenerator)
 			add_child(tile_root)
 
-			# Collision is assumed to be handled by the CSGMesh3D properties in the scene.
+			# Debug: post-add state (global_* require being in the scene tree)
+			print("[MapGen]   grid=(%d,%d) local_pos=%s global_pos=%s scale=%s rot_deg=%s visible=%s" % [
+				x, z,
+				tile_root.position,
+				tile_root.global_position,
+				tile_root.scale,
+				tile_root.rotation_degrees,
+				tile_root.visible,
+			])
+			# World-space AABB after scale (approximation: local aabb scaled)
+			var world_aabb_min = tile_root.global_position + aabb.position * tile_root.scale
+			var world_aabb_max = world_aabb_min + aabb.size * tile_root.scale
+			print("[MapGen]   world_aabb approx min=%s max=%s" % [world_aabb_min, world_aabb_max])
 
 			# Requirement 2: Store tile reference
 			# Since tile_root is a CSGMesh3D with Tile.gd attached, it is the Tile object itself.
@@ -83,12 +117,15 @@ func generate_map():
 			# Apply tile data properties
 			tile_data.walkable = tile_def.walkable
 			tile_data.cost = tile_def.walk_cost
+			tile_data.buildable = tile_def.buildable
 
 			var coords = Vector2i(x, z)
 			generated_tiles[coords] = tile_data
 
 	# After all tiles are added to scene tree, update their Y positions to match actual terrain height
 	_update_tile_heights()
+	# Deferred check: CSG bakes on the next frame, so check after that
+	call_deferred("_debug_check_csg_bakes")
 
 func _update_tile_heights() -> void:
 	"""
@@ -145,3 +182,17 @@ func _get_weighted_random_tile_key() -> String:
 
 	# Randomly pick an element from the weighted list
 	return weighted_list.pick_random()
+
+func _debug_check_csg_bakes() -> void:
+	for coords in generated_tiles:
+		var tile: Tile = generated_tiles[coords]
+		if not is_instance_valid(tile):
+			continue
+		var meshes = tile.get_meshes()
+		var mesh_path = tile.mesh.resource_path if tile.mesh else "null"
+		if meshes.is_empty():
+			print("[MapGen CSG] BAKE FAILED at (%d,%d) mesh=%s" % [coords.x, coords.y, mesh_path])
+		else:
+			var surfaces = meshes[1].get_surface_count() if meshes.size() > 1 else -1
+			var status = "EMPTY" if surfaces == 0 else "ok"
+			print("[MapGen CSG] %s at (%d,%d) surfaces=%d mesh=%s" % [status, coords.x, coords.y, surfaces, mesh_path])

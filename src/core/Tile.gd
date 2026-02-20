@@ -2,9 +2,6 @@ class_name Tile
 extends CSGMesh3D
 
 # Preloads needed for type hinting and access to constants
-const Grid = preload("res://src/core/Grid.gd")
-const Structure = preload("res://src/core/Structure.gd")
-const Unit = preload("res://src/core/Unit.gd")
 const GameConfig = preload("res://data/game_config.gd")
 const GameData = preload("res://data/game_data.gd")
 
@@ -39,6 +36,7 @@ var world_pos: Vector3
 # Gameplay properties
 var walkable: bool = true
 var cost: float = 1.0
+var buildable: bool = true
 
 # Reference to the Structure built on this tile (null if free)
 var structure: Structure = null
@@ -52,8 +50,10 @@ var road_resources_pending: float = 0.0
 var road_resources_in_transit: float = 0.0  # Resources being carried by builders already sent
 var road_builders: Array[int] = []  # Player IDs building this road
 
-# Reference to an optional child node representing a drill hole
-@onready var hole_node: Node3D = $Hole
+var hole_visual: MeshInstance3D = null
+
+# Strategic zoom dot (player-colored sphere, shown when camera is zoomed far out)
+var strategic_dot: MeshInstance3D = null
 
 # A list of neighboring Tile objects, assigned after map generation
 var neighbors: Array[Tile] = []
@@ -86,6 +86,7 @@ func claim_formation_slot(unit: Node3D) -> int:
 	for i in range(occupied_slots.size()):
 		if occupied_slots[i] == null:
 			occupied_slots[i] = unit # Register the unit instance
+			_refresh_strategic_dot()
 			return i
 	return -1 # Full
 
@@ -99,6 +100,7 @@ func release_formation_slot(slot_index: int):
 	"""
 	if slot_index != -1 and slot_index >= 0 and slot_index < occupied_slots.size():
 		occupied_slots[slot_index] = null
+		_refresh_strategic_dot()
 
 func register_builder(builder: Node3D) -> void:
 	builder_occupants.append(builder)
@@ -167,27 +169,43 @@ func set_overlay_tint(color: Color):
 		push_error("Tile (%d, %d): Instance is invalid, cannot set tint." % [x, z])
 		return
 		
-	# self is the CSGMesh3D root node
-	# Use material_overlay to blend on top of existing materials
-	if not is_instance_valid(material_overlay):
-		material_overlay = StandardMaterial3D.new()
-		material_overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		material_overlay.cull_mode = BaseMaterial3D.CULL_DISABLED
-	material_overlay.albedo_color = color
+	# Apply tint to the Visual child (MeshInstance3D), not the invisible CSGMesh3D root
+	var visual: MeshInstance3D = get_node_or_null("Visual")
+	if not is_instance_valid(visual):
+		return
+	if not is_instance_valid(visual.material_overlay):
+		visual.material_overlay = StandardMaterial3D.new()
+		visual.material_overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		visual.material_overlay.cull_mode = BaseMaterial3D.CULL_DISABLED
+	visual.material_overlay.albedo_color = color
 
-func set_tile_visibility(is_visible: bool):
+func set_tile_visibility(_is_visible: bool):
 	"""
 	Sets the visibility of the tile (the root node).
 	"""
 	if is_instance_valid(self):
-		visible = is_visible
+		visible = _is_visible
 
-func set_hole_visibility(is_visible: bool):
-	"""
-	Sets the visibility of the 'Hole' child node.
-	"""
-	if is_instance_valid(hole_node):
-		hole_node.visible = is_visible
+func set_hole_visibility(show_hole: bool):
+	if show_hole:
+		if not is_instance_valid(hole_visual):
+			var disc = CylinderMesh.new()
+			disc.top_radius = 0.2
+			disc.bottom_radius = 0.2
+			disc.height = 0.01
+			var mat = StandardMaterial3D.new()
+			mat.albedo_color = Color(0.05, 0.05, 0.05)
+			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			hole_visual = MeshInstance3D.new()
+			hole_visual.name = "HoleVisual"
+			hole_visual.mesh = disc
+			hole_visual.material_override = mat
+			hole_visual.position = Vector3(0.0, 0.08, 0.0)
+			add_child(hole_visual)
+	else:
+		if is_instance_valid(hole_visual):
+			hole_visual.queue_free()
+			hole_visual = null
 
 func set_road_under_construction(segment_cost: float = 0.0):
 	road_under_construction = true
@@ -379,7 +397,12 @@ func get_flow_cost(player_id: int) -> float:
 	if not walkable:
 		return INF
 
-	# Friendly structures are passable (no extra cost) - builders can move through them freely
+	# Completed friendly structures block flow-field movement: units cannot claim slots on them
+	# (see claim_formation_slot). Returning INF prevents the flow field from routing units
+	# through structure tiles. Units already ON a structure tile (e.g. just spawned from a factory)
+	# can still leave: phase 3 of FlowField assigns a direction toward the lowest-cost neighbour.
+	if structure != null and is_instance_valid(structure) and structure.player_id == player_id and not structure.is_under_construction:
+		return INF
 
 	# 4. Base Terrain Cost + Density Cost
 
@@ -404,9 +427,8 @@ func get_flow_cost(player_id: int) -> float:
 func is_buildable_terrain() -> bool:
 	"""
 	Checks if the tile's underlying terrain type allows placing a structure.
-	For simplicity, currently requires the tile to be walkable.
 	"""
-	return walkable
+	return buildable
 
 func get_road_resource_request() -> float:
 	"""
@@ -420,11 +442,61 @@ func get_road_resource_request() -> float:
 func _ready():
 	# Ensure the Hole node is initially hidden and non-pickable,
 	# as it shouldn't interfere with tile clicks/raycasts.
-	if is_instance_valid(hole_node):
-		hole_node.visible = false
-		
-		# Ensure the visual children of the hole node are not pickable,
-		# as the hole node itself may not have the input_ray_pickable property.
-		for child in hole_node.get_children():
-			if child.has_method("set_input_ray_pickable"):
-				child.set_input_ray_pickable(false)
+	#if is_instance_valid(hole_node):
+	#	hole_node.visible = false
+
+	#	# Ensure the visual children of the hole node are not pickable,
+	#	# as the hole node itself may not have the input_ray_pickable property.
+	#	for child in hole_node.get_children():
+	#		if child.has_method("set_input_ray_pickable"):
+	#			child.set_input_ray_pickable(false)
+
+	pass
+
+# --- Strategic Zoom ---
+
+func _get_occupying_player_id() -> int:
+	# Structure takes priority over units
+	if structure != null and is_instance_valid(structure):
+		return structure.player_id
+	for unit in occupied_slots:
+		if unit != null and is_instance_valid(unit):
+			return unit.player_id
+	return -1
+
+func update_strategic_display(is_strategic: bool) -> void:
+	var player_id := _get_occupying_player_id()
+	var occupied := player_id >= 0
+
+	if not occupied or not is_strategic:
+		if is_instance_valid(strategic_dot):
+			strategic_dot.visible = false
+		return
+
+	# Lazily create the dot on first use
+	if not is_instance_valid(strategic_dot):
+		var sphere := SphereMesh.new()
+		sphere.radius = 0.15
+		sphere.height = 0.3
+		strategic_dot = MeshInstance3D.new()
+		strategic_dot.name = "StrategicDot"
+		strategic_dot.mesh = sphere
+		strategic_dot.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		strategic_dot.position = Vector3(0.0, 0.4, 0.0)
+		add_child(strategic_dot)
+
+	# Update color to match current owner
+	var color := Color.WHITE
+	if player_id < GameData.PLAYER_CONFIGS.size():
+		color = GameData.PLAYER_CONFIGS[player_id].color
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	strategic_dot.material_override = mat
+	strategic_dot.visible = true
+
+func _refresh_strategic_dot() -> void:
+	# Traverse: Tile -> Grid -> Map -> Game
+	var game := get_parent().get_parent().get_parent()
+	if is_instance_valid(game) and game.has_method("get_strategic_zoom"):
+		update_strategic_display(game.get_strategic_zoom())

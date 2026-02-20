@@ -4,7 +4,6 @@ signal structure_selected(structure_key: String)
 signal road_build_requested()
 
 const GameData = preload("res://data/game_data.gd")
-const Player = preload("res://src/Player.gd")
 
 var player: Player
 var buildable_structures: Dictionary = {}

@@ -7,21 +7,21 @@ const UNIT_TYPES = {
 		# User-friendly name for display
 		"display_name": "Infantry",
 		# Path to the unit's 3D mesh file (.obj, .glb, etc.)
-		"mesh_path": "res://assets/robot_pink.obj",
+		"mesh_path": "res://assets/robot_simple.obj",
 		# Movement speed in units per second
-		"move_speed": 1,
+		"move_speed": 0.5,
 		# Radius for collision and selection, measured in hex units
 		"size": 0.08,
 		# Number of formation slots this unit occupies
 		"formation_size": 1,
 		# Maximum health points
-		"max_health": 200.0,
+		"max_health": 100.0,
 		# Damage dealt per successful attack
-		"attack_damage": 10.0,
+		"attack_damage": 1.0,
 		# Maximum distance to attack target, measured in hex units
-		"attack_range": 2.0,
+		"attack_range": 1.0,
 		# Time in seconds required between attacks
-		"attack_cooldown": 1.5,
+		"attack_cooldown": 2,
 		# Maximum distance the unit can see, measured in hex units
 		"vision_range": 8.0,
 		# Resource cost to spawn this unit
@@ -30,38 +30,20 @@ const UNIT_TYPES = {
 		"unit_types": ["military", "infantry"]
 	},
 	
-	# Tank: Slow but strong armored unit
+	# Tank: Slow unit with range
 	"tank": {
 		"display_name": "Tank",
-		"mesh_path": "res://assets/units/tank.obj",
-		"move_speed": 2.0,
-		"size": 0.8,
-		# Number of formation slots this unit occupies
-		"formation_size": 1,
-		"max_health": 500.0,
-		"attack_damage": 40.0,
-		"attack_range": 4.0,
-		"attack_cooldown": 3.0,
+		"mesh_path": "res://assets/robot_simple.obj",
+		"move_speed": 0.2,
+		"size": 0.16,
+		"formation_size": 2,
+		"max_health": 200.0,
+		"attack_damage": 5.0,
+		"attack_range": 2.0,
+		"attack_cooldown": 5.0,
 		"vision_range": 10.0,
-		"cost": 500,
+		"cost": 100,
 		"unit_types": ["military", "tank"]
-	},
-	
-	# Scout: Fastest unit, used primarily for exploration (no attack capability)
-	"scout": {
-		"display_name": "Scout",
-		"mesh_path": "res://assets/units/scout.obj",
-		"move_speed": 8.0,
-		"size": 0.4,
-		# Number of formation slots this unit occupies
-		"formation_size": 1,
-		"max_health": 80.0,
-		"attack_damage": 0.0,
-		"attack_range": 0.0,
-		"attack_cooldown": 0.0,
-		"vision_range": 12.0,
-		"cost": 50,
-		"unit_types": ["scout"]
 	},
 }
 
@@ -72,7 +54,7 @@ const STRUCTURE_TYPES = {
 		"size": 0.3,
 		"cost": 500,
 		"buildable": true,
-		"max_health": 1000,
+		"max_health": 200,
 		"resource_generation_rate": 10,
 		"self_repair_rate": 1,
 		"min_spacing": 5,
@@ -86,9 +68,23 @@ const STRUCTURE_TYPES = {
 		"size": 0.2,
 		"buildable": true,
 		"cost": 150,
-		"max_health": 200,
+		"max_health": 50,
 		"produces_unit_type": "infantry",
 		"production_time": 2.0,
+		"production_rate_max": 1.0,
+		"category": "improvement",
+		"y_offset_fraction": 0.0
+	},
+	
+	"tank_factory": {
+		"display_name": "Tank Factory",
+		"mesh_path": "res://assets/factory.obj",
+		"size": 0.3,
+		"buildable": true,
+		"cost": 400,
+		"max_health": 100,
+		"produces_unit_type": "tank",
+		"production_time": 4.0,
 		"production_rate_max": 1.0,
 		"category": "improvement",
 		"y_offset_fraction": 0.0
@@ -100,7 +96,7 @@ const STRUCTURE_TYPES = {
 		"drill_hole": true,
 		"size": 0.25,
 		"cost": 100,
-		"max_health": 150,
+		"max_health": 25,
 		"resource_generation_rate": 5,
 		"category": "improvement",
 		"y_offset_fraction": -0.8 # Sink the mine halfway into the tile
@@ -111,7 +107,7 @@ const STRUCTURE_TYPES = {
 		"mesh_path": "res://assets/robot_simple.obj",
 		"size": 0.3,
 		"cost": 120,
-		"max_health": 250,
+		"max_health": 100,
 		"attack_damage": 25,
 		"attack_range": 4,
 		"attack_cooldown": 1.5,
@@ -124,11 +120,11 @@ const STRUCTURE_TYPES = {
 		"mesh_path": "res://assets/robot_simple.obj",
 		"size": 0.3,
 		"cost": 200,
-		"max_health": 150,
+		"max_health": 25,
 		"attack_damage": 40,
 		"attack_range": 8,
 		"attack_cooldown": 3.0,
-		"aoe_radius": 2,
+		"aoe_radius": 1,
 		"category": "forward",
 		"y_offset_fraction": 0.0
 	},
@@ -162,6 +158,7 @@ const TILES = {
 		"walk_cost": 1.0,
 		"walkable": true,
 		"weight": 5, # Higher probability
+		"buildable": true,
 	},
 	"dirt": {
 		"mesh_path": "res://assets/kenney_3d_hex/Models/OBJ format/dirt.obj",
@@ -169,6 +166,7 @@ const TILES = {
 		"walk_cost": 1.0,
 		"walkable": true,
 		"weight": 5, # Higher probability
+		"buildable": true,
 	},
 	"mountain": {
 		"mesh_path": "res://assets/kenney_3d_hex/Models/OBJ format/grass-hill.obj",
@@ -176,6 +174,7 @@ const TILES = {
 		"walk_cost": 2.0,
 		"walkable": true,
 		"weight": 1, # Lower probability
+		"buildable": false,
 	},
 	"water": {
 		"mesh_path": "res://assets/kenney_3d_hex/Models/OBJ format/water.obj",
@@ -183,6 +182,7 @@ const TILES = {
 		"walk_cost": 1e20, # Represents infinite cost (Tile.INF)
 		"walkable": false,
 		"weight": 1, # Lower probability
+		"buildable": false,
 	},
 }
 

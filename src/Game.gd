@@ -32,6 +32,11 @@ var game_over_overlay: Control = null
 var game_over_title: Label = null
 var game_over_message: Label = null
 
+var _is_strategic_zoom: bool = false
+
+func get_strategic_zoom() -> bool:
+	return _is_strategic_zoom
+
 # Clears existing players array and initializes players based on config.
 # player_configs: Array of Dictionary, e.g., [{id: 0, color: Color.RED, display_name: "Red Team"}]
 func initialize_players(player_configs: Array) -> void:
@@ -274,6 +279,28 @@ func check_victory_defeat_conditions():
 		set_game_state(GameState.VICTORY)
 		_show_game_over_screen(true)
 
+func _on_strategic_zoom_changed(is_strategic: bool) -> void:
+	_is_strategic_zoom = is_strategic
+	# Update all tiles (dot visibility)
+	var grid = map_node.get_node_or_null("Grid")
+	if is_instance_valid(grid):
+		for tile in grid.tiles.values():
+			if is_instance_valid(tile):
+				tile.update_strategic_display(is_strategic)
+	# Hide/show unit and structure meshes
+	for player in players:
+		if not is_instance_valid(player):
+			continue
+		for unit in player.units:
+			if is_instance_valid(unit):
+				unit.set_strategic_zoom(is_strategic)
+		for structure in player.structures:
+			if is_instance_valid(structure):
+				structure.set_strategic_zoom(is_strategic)
+		for builder in player.builders:
+			if is_instance_valid(builder):
+				builder.set_strategic_zoom(is_strategic)
+
 func _on_structure_destroyed(structure: Structure):
 	"""Called when any structure is destroyed."""
 	print("Game: Structure destroyed at %s (Player %d)" % [structure.current_tile.get_coords(), structure.player_id])
@@ -390,6 +417,10 @@ func _ready() -> void:
 	# Connect hex click signal from camera for placement confirmation
 	if $Camera3D.has_signal("hex_clicked"):
 		$Camera3D.hex_clicked.connect(_on_hex_clicked)
+
+	# Connect strategic zoom signal
+	if $Camera3D.has_signal("strategic_zoom_changed"):
+		$Camera3D.strategic_zoom_changed.connect(_on_strategic_zoom_changed)
 
 	# Wait for specified delay before starting visualization setup
 	await get_tree().create_timer(GameData.START_DELAY_SECONDS).timeout

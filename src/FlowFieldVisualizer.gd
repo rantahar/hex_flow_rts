@@ -5,7 +5,7 @@ class_name FlowFieldVisualizer
 var arrow_mesh: Mesh
 
 # Configuration
-const ARROW_HEIGHT: float = 0.4
+const ARROW_HEIGHT: float = 0.2
 const ARROW_OFFSET_Y: float = 0.1 # Offset above the tile center
 
 # Color gradient for Player 0 (0 = Green, Max = Red)

@@ -1,8 +1,6 @@
 extends Node3D
 class_name Unit
-const HealthBar3D = preload("res://src/HealthBar3D.gd")
-const Grid = preload("res://src/core/Grid.gd")
-const Structure = preload("res://src/core/Structure.gd")
+
 const GameData = preload("res://data/game_data.gd")
 
 var health_bar: HealthBar3D
@@ -217,7 +215,12 @@ func _ready():
 		grid = map_node.get_node("Grid")
 	
 	_correct_height()
-	
+
+	# Apply current strategic zoom state
+	var game_node = get_parent().get_parent()
+	if is_instance_valid(game_node) and game_node.has_method("get_strategic_zoom"):
+		set_strategic_zoom(game_node.get_strategic_zoom())
+
 	# Movement will be initiated by Game.gd after flow fields are calculated.
 	if unit_types.has("military"):
 		is_moving = false # Ensure movement is off initially
@@ -249,82 +252,68 @@ func _correct_height():
 
 # Called every physics frame (60 times per second by default)
 # Called every frame for time-dependent combat logic
-func _process(delta: float):
+func _process(_delta: float):
 	"""
 	Called every frame. Handles combat logic for military units, allowing them to attack targets.
 
 	Arguments:
 	- delta (float): The elapsed time since the previous frame.
 	"""
+	pass
 
 # Finds the closest enemy unit in any neighboring tile (Euclidean distance squared)
 # Returns the closest enemy unit instance, or null.
 # Finds the closest enemy unit or structure in range (Euclidean distance squared)
 # Returns the closest enemy instance (Unit or Structure), or null.
-func _get_closest_enemy_in_range() -> Node3D:
+func _get_enemy_tiles_in_range() -> Array[Tile]:
 	"""
-	Finds the closest enemy unit or structure within a bounding box defined by the unit's attack range.
-	Checks all tiles within the bounding box and calculates the exact world distance to enemy targets.
-
-	Returns:
-	- Node3D: The closest enemy instance (Unit or Structure) within range, or null if none found.
+	BFS from current_tile up to ceil(attack_range_hex) hops.
+	Returns all tiles within range that contain a reserved enemy unit or enemy structure,
+	in BFS order (nearest tiles first). Returns empty array for range-0 units.
 	"""
 	if not current_tile or not grid:
-		return null
+		return []
+	var max_hops: int = ceili(config.get("attack_range", 0.0))
+	if max_hops <= 0:
+		return []
 
-	var attack_range_hex: float = config.get("attack_range", 0.0)
-	var max_hex_distance: int = ceil(attack_range_hex)
-	
-	if max_hex_distance <= 0:
-		return null
-		
-	# Calculate attack range in world units (squared for comparison optimization)
-	var attack_range_world: float = attack_range_hex * Grid.HEX_SCALE
-	var attack_range_world_sq: float = attack_range_world * attack_range_world
+	var result: Array[Tile] = []
+	var visited: Dictionary = { current_tile: true }
+	var frontier: Array[Tile] = [current_tile]
 
-	var closest_enemy: Node3D = null
-	# Initialize minimum distance squared to the attack range squared + 1 (slightly outside initial range)
-	var min_distance_sq: float = attack_range_world_sq + 1.0
+	for _depth in range(max_hops + 1):
+		var next_frontier: Array[Tile] = []
+		for tile_ref in frontier:
+			if tile_ref.is_flow_target(player_id):
+				result.append(tile_ref)
+			for neighbor in tile_ref.neighbors:
+				if not visited.has(neighbor):
+					visited[neighbor] = true
+					next_frontier.append(neighbor)
+		frontier = next_frontier
 
-	var current_x: int = current_tile.x
-	var current_z: int = current_tile.z
-	var self_pos: Vector3 = position
+	return result
 
-	# Loop through a bounding box of coordinates
-	for x in range(current_x - max_hex_distance, current_x + max_hex_distance + 1):
-		for z in range(current_z - max_hex_distance, current_z + max_hex_distance + 1):
-			var tile_coords = Vector2i(x, z)
-			
-			if not grid.is_valid_coords(tile_coords):
-				continue
-				
-			var tile_ref: Tile = grid.get_tile_by_coords(tile_coords)
-			if not is_instance_valid(tile_ref):
-				continue
-			
-			var targets_on_tile: Array[Node3D] = []
-			
-			# 1. Check for enemy units
-			for unit_ref in tile_ref.occupied_slots:
-				if is_instance_valid(unit_ref) and unit_ref.player_id != player_id:
-					targets_on_tile.append(unit_ref)
-					
-			# 2. Check for enemy structures
-			if tile_ref.structure != null and is_instance_valid(tile_ref.structure) and tile_ref.structure.player_id != player_id:
-				targets_on_tile.append(tile_ref.structure)
-			
-			
-			# Check distances for all found targets on this tile
-			for target_ref in targets_on_tile:
-				# Calculate exact distance squared to enemy position
-				var distance_sq = self_pos.distance_squared_to(target_ref.position)
-				
-				# Track closest enemy (minimum distance) AND ensure it is within range
-				if distance_sq <= attack_range_world_sq and distance_sq < min_distance_sq:
-					min_distance_sq = distance_sq
-					closest_enemy = target_ref
+func _get_closest_enemy_in_range() -> Node3D:
+	"""
+	Returns the nearest stopped enemy unit or enemy structure within attack range.
+	Uses _get_enemy_tiles_in_range() (BFS order = nearest first) and filters for
+	stopped units (is_moving == false). Structures are always considered stopped.
 
-	return closest_enemy
+	Returns:
+	- Node3D: The closest targetable enemy (Unit or Structure), or null if none found.
+	"""
+	for tile_ref in _get_enemy_tiles_in_range():
+		for unit_ref in tile_ref.occupied_slots:
+			if is_instance_valid(unit_ref) \
+					and unit_ref.player_id != player_id \
+					and not unit_ref.is_moving:
+				return unit_ref
+		if tile_ref.structure != null \
+				and is_instance_valid(tile_ref.structure) \
+				and tile_ref.structure.player_id != player_id:
+			return tile_ref.structure
+	return null
 
 func _try_attack():
 	"""
@@ -370,11 +359,8 @@ func _physics_process(delta):
 		return
 
 	var target_destination: Vector3 = target_world_pos
-	var arriving_at_formation_pos: bool = false
-	
 	if formation_slot != -1:
 		target_destination = formation_position
-		arriving_at_formation_pos = true
 
 	# Calculate effective speed based on tile cost (higher cost = slower)
 	var tile_cost: float = 1.0
@@ -491,21 +477,17 @@ func _move_to_next_tile():
 		is_moving = false
 		return
 	
-	# 3. Check for enemies in attack range
-	if _get_closest_enemy_in_range():
-		# Cannot move if an enemy is in range
+	# 2.5. Stop if any tile within firing range has an enemy reservation
+	if not _get_enemy_tiles_in_range().is_empty():
 		is_moving = false
-		
-		# If we are transitioning into combat, start the timer and try to attack immediately
 		if not in_combat and unit_types.has("military"):
 			in_combat = true
 			if attack_check_timer:
 				attack_check_timer.start()
-			_try_attack() # Immediate attack attempt
-			
+			_try_attack()
 		return
-		
-	# 4. Check for available formation slot and claim it
+
+	# 3. Check for available formation slot and claim it
 	if not try_claim_new_slot(next_tile, current_tile):
 		# Could not claim a slot on the next tile, likely full
 		is_moving = false
@@ -552,3 +534,9 @@ func _on_muzzle_flash_timeout():
 	Callback for the MuzzleFlashTimer. Hides the muzzle flash light by setting its energy to 0.0.
 	"""
 	muzzle_flash.light_energy = 0.0
+
+func set_strategic_zoom(is_strategic: bool) -> void:
+	if is_instance_valid(mesh_instance):
+		mesh_instance.visible = not is_strategic
+	if is_instance_valid(health_bar):
+		health_bar.visible = not is_strategic

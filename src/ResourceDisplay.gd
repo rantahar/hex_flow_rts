@@ -1,7 +1,5 @@
 extends HBoxContainer
 
-const Player = preload("res://src/Player.gd")
-
 var player: Player
 var resource_label: Label
 

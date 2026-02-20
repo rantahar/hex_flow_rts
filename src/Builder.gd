@@ -1,11 +1,7 @@
 extends Node3D
 class_name Builder
 
-const Grid = preload("res://src/core/Grid.gd")
-const Structure = preload("res://src/core/Structure.gd")
-const Tile = preload("res://src/core/Tile.gd")
 const GameData = preload("res://data/game_data.gd")
-const HealthBar3D = preload("res://src/HealthBar3D.gd")
 
 var player_id: int = 0
 var resources_carried: float = 0.0
@@ -91,6 +87,17 @@ func _ready():
 	if map_node and is_instance_valid(map_node.get_node_or_null("Grid")):
 		grid = map_node.get_node("Grid")
 	_correct_height()
+
+	# Apply current strategic zoom state
+	var game_node = get_parent().get_parent()
+	if is_instance_valid(game_node) and game_node.has_method("get_strategic_zoom"):
+		set_strategic_zoom(game_node.get_strategic_zoom())
+
+func set_strategic_zoom(is_strategic: bool) -> void:
+	if is_instance_valid(mesh_instance):
+		mesh_instance.visible = not is_strategic
+	if is_instance_valid(health_bar):
+		health_bar.visible = not is_strategic
 
 func _correct_height():
 	var map_node = get_parent()

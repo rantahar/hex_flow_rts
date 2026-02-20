@@ -2,9 +2,7 @@ extends Node3D
 class_name StructurePlacer
 
 const GameData = preload("res://data/game_data.gd")
-const Tile = preload("res://src/core/Tile.gd")
-const Player = preload("res://src/Player.gd")
-const Grid = preload("res://src/core/Grid.gd")
+
 
 # Constants for placement overlay colors (Now used for global map tinting on entry/exit)
 const TINT_COLOR_VALID: Color = Color(0.0, 1.0, 0.0, 0.4) # Green, semi-transparent
@@ -77,15 +75,7 @@ func enter_placement_mode(structure_type: String):
 			tile.set_overlay_tint(tint_color)
 		return
 
-	# Non-improvement: highlight all reachable/buildable tiles as before
-	for coords in grid_ref.tiles:
-		var tile = grid_ref.tiles[coords]
-		var structure_exists = is_instance_valid(tile.structure)
-		var is_valid_for_placement = tile.is_buildable_terrain() and not structure_exists
-		var tint_color = TINT_COLOR_VALID if is_valid_for_placement else TINT_COLOR_INVALID
-		tile.set_overlay_tint(tint_color)
-	
-	# Determine reachable tiles for placement and highlight them
+	# Determine reachable tiles for placement and apply tinting.
 	# References should be set via setup() in Game._ready()
 	var grid = grid_ref
 
@@ -119,14 +109,14 @@ func enter_placement_mode(structure_type: String):
 			reachable_coords.append(coord)
 
 		print("StructurePlacer: Calculated reachability from %d bases, %d tiles reachable" % [player_base_coords.size(), reachable_coords.size()])
-		
-		# --- REQUIREMENT 1: Apply tint to ALL tiles when entering placement mode ---
+
+		# Apply tint to all tiles: green only if buildable, unoccupied, AND reachable by builders.
 		for coords in grid.tiles:
 			var tile: Tile = grid.tiles[coords]
 			if is_instance_valid(tile):
-				# Validity check: buildable if tile meets terrain requirements AND no structure exists.
 				var structure_exists = is_instance_valid(tile.structure)
-				var is_valid_for_placement = tile.is_buildable_terrain() and not structure_exists
+				var is_reachable = reachable_coords.has(coords)
+				var is_valid_for_placement = tile.is_buildable_terrain() and not structure_exists and is_reachable
 				var tint_color: Color = TINT_COLOR_VALID if is_valid_for_placement else TINT_COLOR_INVALID
 				tile.set_overlay_tint(tint_color)
 	else:
@@ -274,15 +264,6 @@ func update_preview(hovered_tile: Tile):
 	if is_valid and not player.can_afford(current_structure_type):
 		is_valid = false
 
-	# 4. Update tile tint based on validation (This handles hover feedback)
-	var tint_color: Color
-	if is_valid:
-		tint_color = TINT_COLOR_VALID
-	else:
-		tint_color = TINT_COLOR_INVALID
-		
-	# Removed: hovered_tile.set_overlay_tint(tint_color)
-	
 
 # New method to initialize core references
 func setup(grid: Grid):
@@ -319,6 +300,12 @@ func attempt_placement(tile: Tile, map_node: Node3D) -> bool:
 			allowed_neighbor_coords = neighbor_set.keys()
 		if not allowed_neighbor_coords.has(tile.get_coords()):
 			print("StructurePlacer: Cannot place improvement here. Not adjacent to base.")
+			return false
+
+	# For non-improvements, verify the tile is reachable by builders from a base.
+	if not is_improvement:
+		if not reachable_coords.has(tile.get_coords()):
+			print("StructurePlacer: Cannot place here. Tile is not reachable from any base.")
 			return false
 
 	# Standard checks for all structures

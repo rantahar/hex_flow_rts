@@ -1,6 +1,8 @@
 extends Node
 class_name Grid
 
+const GameData = preload("res://data/game_data.gd")
+
 # Hex grid geometry constants
 # HEX_SCALE is kept as a literal here because Tile.gd references it in a const chain
 # (FORMATION_RADIUS). The canonical definition to change is GameConfig.HEX_SCALE.
@@ -202,66 +204,64 @@ func connect_neighbors():
 
 func get_reachable_tiles(start_coord: Vector2i) -> Array[Vector2i]:
 	"""
-	Performs a Breadth-First Search (BFS) to find all walkable tiles
-	reachable from the starting coordinate.
-	A tile is reachable if it is walkable and has a finite cost.
-	
+	Performs a Breadth-First Search (BFS) to find all tiles reachable from the starting
+	coordinate via walkable terrain or completed roads (which bridge over water).
+
 	Arguments:
 	- start_coord (Vector2i): The grid coordinate (x, z) to start the search from.
-	
+
 	Returns:
 	- Array[Vector2i]: An array of coordinates for all reachable tiles.
 	"""
 	var start_tile: Tile = get_tile_by_coords(start_coord)
-	
-	# Using Godot's float infinity constant defined in Tile.gd
-	# We rely on Tile being preloaded implicitly by MapGenerator or similar,
-	# but for explicit type hints here, we need it.
-	# Since Tile.gd uses `const Grid = preload("res://src/core/Grid.gd")`,
-	# Grid.gd should probably preload Tile.gd too if we want to use its INF constant,
-	# but `Tile` is already typed in `get_tile_by_coords` which returns a Tile.
-	# For simplicity, I'll redefine INF if it's not globally available or accessible.
-	# Wait, `get_tile_by_coords` is dynamically typed, but the tile itself is a typed class.
-	# I'll use a direct float value as a fallback, or assume the Tile object carries the necessary info.
-	# Tile.gd: const INF: float = 1e20
-	const INF: float = 1e20 # Defining it here to avoid dependency on Tile.gd constants
-	
+
+	const INF: float = 1e20
+
 	if start_tile == null or not start_tile.walkable or start_tile.cost >= INF:
-		return [] # Start tile is invalid or blocked/unreachable
-		
+		return []
+
 	var queue: Array = [start_tile]
-	var visited: Dictionary = {start_coord: true} # Using coordinates for tracking
+	var visited: Dictionary = {start_coord: true}
 	var reachable_coords: Array[Vector2i] = [start_coord]
-	
+
 	while not queue.is_empty():
 		var current_tile: Tile = queue.pop_front()
-		
-		# Current tile neighbors are already Tile objects
+
 		for neighbor_tile in current_tile.neighbors:
 			var neighbor_coord: Vector2i = neighbor_tile.get_coords()
-			
-			# Check reachability criteria: walkable and finite cost
-			# We also check if the tile is known to the grid (by checking tiles.has(coord))
-			# but since `current_tile.neighbors` only contains tiles known to the grid,
-			# we only need to check walkability/cost and visited status.
-			if neighbor_tile.walkable and neighbor_tile.cost < INF and not visited.has(neighbor_coord):
+			if visited.has(neighbor_coord):
+				continue
+			# Traversable if walkable terrain OR a completed road (bridges over water)
+			var is_traversable: bool = (neighbor_tile.walkable and neighbor_tile.cost < INF) \
+				or (neighbor_tile.has_road and not neighbor_tile.road_under_construction)
+			if is_traversable:
 				visited[neighbor_coord] = true
 				reachable_coords.append(neighbor_coord)
 				queue.append(neighbor_tile)
-				
+
 	return reachable_coords
 
-func find_path(from_coords: Vector2i, to_coords: Vector2i) -> Array[Vector2i]:
+func find_path(from_coords: Vector2i, to_coords: Vector2i, walkable_only: bool = false) -> Array[Vector2i]:
 	"""
-	BFS point-to-point pathfinding. Traverses all tiles including non-walkable ones
-	(since roads can be built on water/mountains). Returns ordered path from start to end.
-	Returns empty array if no path exists.
+	Point-to-point pathfinding.
+
+	walkable_only = false (default): plain BFS over all tiles — used for road-drawing
+	preview where roads can be drawn over water and hop count is the relevant metric.
+
+	walkable_only = true: Dijkstra over passable tiles (walkable terrain + completed roads)
+	weighted by travel cost matching Builder._physics_process (road = 0.3, grass/dirt = 1.0,
+	mountain = 2.0). Builders will prefer road routes even when they require more hops.
 	"""
 	if not tiles.has(from_coords) or not tiles.has(to_coords):
 		return []
 	if from_coords == to_coords:
 		return [from_coords]
+	if walkable_only:
+		return _find_path_dijkstra(from_coords, to_coords)
+	return _find_path_bfs(from_coords, to_coords)
 
+# BFS over all tiles — road drawing preview (hop count only, no walkability filter).
+func _find_path_bfs(from_coords: Vector2i, to_coords: Vector2i) -> Array[Vector2i]:
 	var queue: Array = [from_coords]
 	var came_from: Dictionary = {from_coords: Vector2i(-1, -1)}
 
@@ -269,18 +269,66 @@ func find_path(from_coords: Vector2i, to_coords: Vector2i) -> Array[Vector2i]:
 		var current: Vector2i = queue.pop_front()
 		if current == to_coords:
 			break
+		for neighbor_tile in tiles[current].neighbors:
+			var nc: Vector2i = neighbor_tile.get_coords()
+			if not came_from.has(nc):
+				came_from[nc] = current
+				queue.append(nc)
 
-		var current_tile: Tile = tiles[current]
-		for neighbor_tile in current_tile.neighbors:
-			var neighbor_coord: Vector2i = neighbor_tile.get_coords()
-			if not came_from.has(neighbor_coord):
-				came_from[neighbor_coord] = current
-				queue.append(neighbor_coord)
+	return _reconstruct_path(came_from, to_coords)
 
-	# Reconstruct path
+# Dijkstra over walkable terrain + completed roads, weighted by tile travel cost.
+func _find_path_dijkstra(from_coords: Vector2i, to_coords: Vector2i) -> Array[Vector2i]:
+	const BIG: float = 1e20
+	var road_cost: float = GameData.ROAD_CONFIG.road_tile_cost
+
+	var dist: Dictionary = {from_coords: 0.0}
+	var came_from: Dictionary = {from_coords: Vector2i(-1, -1)}
+	# open_set entries: [accumulated_cost, coords]
+	var open_set: Array = [[0.0, from_coords]]
+
+	while not open_set.is_empty():
+		# Pop lowest-cost entry (linear scan — fine for ≤400 tiles)
+		var min_i: int = 0
+		for i in range(1, open_set.size()):
+			if open_set[i][0] < open_set[min_i][0]:
+				min_i = i
+		var entry: Array = open_set[min_i]
+		open_set.remove_at(min_i)
+
+		var cur_cost: float = entry[0]
+		var current: Vector2i = entry[1]
+
+		if current == to_coords:
+			break
+		if cur_cost > dist.get(current, BIG):
+			continue  # stale entry
+
+		for neighbor_tile in tiles[current].neighbors:
+			var nc: Vector2i = neighbor_tile.get_coords()
+			var is_traversable: bool = neighbor_tile.walkable \
+				or (neighbor_tile.has_road and not neighbor_tile.road_under_construction)
+			if not is_traversable:
+				continue
+
+			# Edge cost matches Builder._physics_process speed formula
+			var edge_cost: float
+			if neighbor_tile.has_road and not neighbor_tile.road_under_construction:
+				edge_cost = road_cost
+			else:
+				edge_cost = neighbor_tile.cost
+
+			var new_cost: float = cur_cost + edge_cost
+			if new_cost < dist.get(nc, BIG):
+				dist[nc] = new_cost
+				came_from[nc] = current
+				open_set.append([new_cost, nc])
+
+	return _reconstruct_path(came_from, to_coords)
+
+func _reconstruct_path(came_from: Dictionary, to_coords: Vector2i) -> Array[Vector2i]:
 	if not came_from.has(to_coords):
 		return []
-
 	var path: Array[Vector2i] = []
 	var step: Vector2i = to_coords
 	while step != Vector2i(-1, -1):
