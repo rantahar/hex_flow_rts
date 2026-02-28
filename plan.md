@@ -3,7 +3,7 @@
 # 1. Project Overview
 
 - **Vision**: Flow-based RTS where hundreds of autonomous units naturally form frontlines and flank based on density. Player manages flow, not individual units.
-- **Tech Stack**: Godot 4.3, GDScript, Forward+ Renderer, Native deployment (Linux/Windows)
+- **Tech Stack**: Godot 4.6, GDScript, Forward+ Renderer, Native deployment (Linux/Windows)
 - **Development Approach**:
     - Claude Code for implementation, planning, and architecture
     - Direct file editing and testing in the codebase
@@ -17,7 +17,7 @@
 - **Phase 4 (Combat System)**: COMPLETE
 - **Phase 5 (Economy & Structures)**: COMPLETE
 - **Phase 6 (Builder Movement Refactoring)**: COMPLETE
-- **Phase 7 (UI & Structure Info Panel)**: IN PROGRESS
+- **Phase 7 (UI & Structure Info Panel)**: COMPLETE
 - **Phase 8 (Map & AI — Required Before Publishing)**: PENDING
 
 # 3. Completed Systems
@@ -116,10 +116,7 @@
 - Multi-selection support with Ctrl+click
 - "Select All of Type" functionality for batch control
 - Structure attack system (cannon, artillery) - auto-attacks closest enemy tile, damages all units on tile
-
-- Implement army unit cost.
-
-- Separate builder list on tiles (currently using formations slots). Builders should be targetable and collide with enemies, but pass through full formations and 
+- Unit spawning costs resources (infantry: 30, tank: 100), deducted on production
 
 ## 3.10. Builder Unit System
 
@@ -154,6 +151,16 @@
 - Input blocking during game over state
 - Base counting logic that correctly excludes under-construction bases
 - Signal system for structure destruction detection and state checking
+
+## 3.14. Structure Info Panel (Phase 7)
+
+- `ProductionControlUI.gd` shows a dedicated panel when one or more structures are selected
+- Displays structure name, production cost and rate (e.g. "producing: infantry (30)"), resource generation rate (+X/sec), attack damage and range, and under-construction status
+- 3D orbiting mesh preview via `SubViewport` + `Camera3D` (96×96 viewport, 30° elevation, full revolution ~15.7s)
+- "Select All of Type" button for batch selection of structures of the same kind
+- Per-structure toggles for resource generation and unit production
+- Production progress bar (visible for factories only)
+- Connected to `Game.gd`'s `selection_changed(structures: Array[Structure])` signal
 
 ## 3.13. Debug Visualization
 
@@ -271,18 +278,14 @@ game.tscn
   - `Builder.gd`: Removed `formation_slot` and `formation_position`; rewrote `_advance_to_next_waypoint()` to move to tile center, check `has_enemy_units()` only, and never wait on slots
   - Military density costs and `has_enemy_units()` are unaffected by builders
 
-## 6.3. Phase 7: User Interface & Control (Future)
+## 6.3. Phase 7: User Interface & Control (COMPLETE)
 
-- Additional UI polish and player feedback
-- Advanced selection tools
-- Upgrade menu
-- Additional game state indicators
-- **Structure info panel**: When a structure is selected, display a dedicated info panel showing:
-  - A small camera view or sprite of the structure
-  - Structure name and type
-  - Unit production cost and production time (e.g. "100 resources / 5s = 20/sec") for factories
-  - Current health and status
-  - This applies to all structure types, not just factories
+- **Structure info panel**: Implemented in `ProductionControlUI.gd`
+  - 3D orbiting mesh preview (SubViewport, 96×96, ~15.7s revolution)
+  - Structure name, production cost/rate, resource gen rate, attack stats, construction status
+  - "Select All of Type" button; production and resource-generation toggles
+  - Production progress bar for factories
+  - Driven by `Game.gd`'s `selection_changed` signal
 
 ## 6.4. Phase 8: Map & AI (Required Before Publishing)
 
