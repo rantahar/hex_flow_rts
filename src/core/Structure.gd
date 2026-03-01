@@ -288,16 +288,16 @@ func _on_builder_spawn_timeout():
 			"target_tile": structure.current_tile
 		})
 
-	# Check all tiles for roads under construction by this player
-	for tile in grid.tiles.values():
-		if not is_instance_valid(tile):
+	# Check road construction tiles registered by this player
+	var stale: Array[Tile] = []
+	for tile in player.road_construction_tiles:
+		if not is_instance_valid(tile) \
+				or not tile.road_under_construction \
+				or player_id not in tile.road_builders:
+			stale.append(tile)
 			continue
-		if not tile.road_under_construction:
-			continue
-		if player_id not in tile.road_builders:
-			continue  # This player is not building this road
 		if tile.road_resources_pending <= 0:
-			continue  # No resources needed
+			continue
 
 		# Validate that this road tile has at least one walkable neighbor (can be built from)
 		var has_walkable_neighbor = false
@@ -306,7 +306,7 @@ func _on_builder_spawn_timeout():
 				has_walkable_neighbor = true
 				break
 		if not has_walkable_neighbor:
-			continue  # Skip roads with no walkable neighbors
+			continue
 
 		var road_request = tile.get_road_resource_request()
 		if road_request <= 0:
@@ -320,6 +320,10 @@ func _on_builder_spawn_timeout():
 			"distance": road_dist,
 			"target_tile": tile
 		})
+
+	# Lazy cleanup of completed road tiles
+	for tile in stale:
+		player.road_construction_tiles.erase(tile)
 
 	if requests.is_empty():
 		return
@@ -473,6 +477,11 @@ func _on_muzzle_flash_timeout():
 	if is_instance_valid(muzzle_flash):
 		muzzle_flash.light_energy = 0.0
 
+func _rotate_to_face(direction: Vector3):
+	var planar = Vector2(direction.x, direction.z).normalized()
+	if planar != Vector2.ZERO:
+		rotation.y = atan2(planar.x, planar.y)
+
 func _try_attack():
 	var current_time = Time.get_unix_time_from_system()
 	if (current_time - last_attack_time) < attack_cooldown:
@@ -481,6 +490,10 @@ func _try_attack():
 	var target_tile = _find_enemy_tile_in_range()
 	if not is_instance_valid(target_tile):
 		return
+
+	# Rotate to face the target
+	var target_world = Vector3(target_tile.world_pos.x, position.y, target_tile.world_pos.z)
+	_rotate_to_face(target_world - position)
 
 	# Deal damage to all enemy units on the tile
 	for unit_ref in target_tile.occupied_slots:

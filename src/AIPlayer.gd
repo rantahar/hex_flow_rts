@@ -32,3 +32,95 @@ func start_turn(p_map_node: Node3D):
 			return
 
 	push_error("AIPlayer %d: no free tile next to base for drone_factory." % id)
+
+
+# --- Shared spatial utilities (available to all subclasses) ---
+
+# Returns the first ring-1 neighbor that is walkable, buildable, and free.
+func _find_free_neighbor(center_tile: Tile) -> Tile:
+	for neighbor in center_tile.neighbors:
+		if not is_instance_valid(neighbor):
+			continue
+		if neighbor.walkable and neighbor.buildable and neighbor.structure == null:
+			return neighbor
+	return null
+
+
+# True if all ring-1 neighbors of base_tile are either non-buildable,
+# non-walkable, or already occupied.
+func _is_base_full(base_tile: Tile) -> bool:
+	return _find_free_neighbor(base_tile) == null
+
+
+# True if any ring-1 neighbor of base_tile holds a drone_factory belonging
+# to this player.
+func _base_has_factory(base_tile: Tile) -> bool:
+	for neighbor in base_tile.neighbors:
+		if not is_instance_valid(neighbor):
+			continue
+		var s = neighbor.structure
+		if s and s.player_id == id and s.structure_type == "drone_factory":
+			return true
+	return false
+
+
+# Returns true if every non-under-construction base has no free buildable
+# walkable neighbors remaining.
+func _all_bases_full() -> bool:
+	for structure in structures:
+		if structure.structure_type != "base":
+			continue
+		if structure.is_under_construction:
+			continue
+		if not _is_base_full(structure.current_tile):
+			return false
+	return true
+
+
+# BFS from center_tile outward up to `radius` steps, marking all visited
+# tile coords in `dict`.
+func _mark_forbidden_zone(center_tile: Tile, radius: int, dict: Dictionary) -> void:
+	var queue: Array = [[center_tile, 0]]
+	var visited: Dictionary = {center_tile.get_coords(): true}
+
+	while not queue.is_empty():
+		var entry: Array = queue.pop_front()
+		var tile: Tile = entry[0]
+		var dist: int = entry[1]
+
+		dict[tile.get_coords()] = true
+
+		if dist >= radius:
+			continue
+
+		for neighbor in tile.neighbors:
+			if not is_instance_valid(neighbor):
+				continue
+			var nc: Vector2i = neighbor.get_coords()
+			if not visited.has(nc):
+				visited[nc] = true
+				queue.append([neighbor, dist + 1])
+
+
+# Returns the average grid position (Vector2) of all enemy base tiles.
+# Falls back to a far-away point if no enemy bases exist.
+func _get_enemy_centroid() -> Vector2:
+	var game = get_parent()
+	if not is_instance_valid(game):
+		return Vector2(1000.0, 1000.0)
+
+	var total := Vector2.ZERO
+	var count: int = 0
+
+	for player in game.players:
+		if not is_instance_valid(player) or player.id == id:
+			continue
+		for structure in player.structures:
+			if structure.structure_type == "base" and not structure.is_under_construction:
+				total += Vector2(structure.current_tile.x, structure.current_tile.z)
+				count += 1
+
+	if count == 0:
+		return Vector2(1000.0, 1000.0)  # No known enemies; pick any far tile.
+
+	return total / float(count)

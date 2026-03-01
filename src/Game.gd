@@ -316,6 +316,11 @@ func _start_menu_ready() -> void:
 		if player is AIPlayer:
 			player.start_turn(map_node)
 
+	# Spawn initial infantry reserve for each AI player
+	for player in players:
+		if is_instance_valid(player) and is_instance_valid(player.spawn_tile):
+			player.start_initial_reserve_spawn(map_node, GameData.INITIAL_RESERVE_SIZE, GameData.INITIAL_RESERVE_RATE)
+
 	# Connect strategic zoom so the camera still works
 	if $Camera3D.has_signal("strategic_zoom_changed"):
 		$Camera3D.strategic_zoom_changed.connect(_on_strategic_zoom_changed)
@@ -478,6 +483,11 @@ func _game_ready() -> void:
 				player.start_turn(map_node)
 			else:
 				push_error("Player ID %d configured as 'ai' but is not an AIPlayer instance." % player.id)
+
+	# Spawn initial infantry reserve for each player
+	for player in players:
+		if is_instance_valid(player) and is_instance_valid(player.spawn_tile):
+			player.start_initial_reserve_spawn(map_node, GameData.INITIAL_RESERVE_SIZE, GameData.INITIAL_RESERVE_RATE)
 
 	# Set the human player reference on the StructurePlacer instance
 	if is_instance_valid(structure_placer) and is_instance_valid(human_player):

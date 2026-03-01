@@ -324,12 +324,6 @@ func attempt_placement(tile: Tile, map_node: Node3D) -> bool:
 	var success = placing_player.place_structure(current_structure_type, tile, map_node)
 	if success and is_instance_valid(tile):
 		tile.set_overlay_tint(TINT_COLOR_RESET)
-		var drill_hole = structure_config.get("drill_hole", false)
-		if drill_hole:
-			tile.set_hole_visibility(true)
-		var hide_tile = structure_config.get("hide_tile", false)
-		if hide_tile:
-			tile.set_tile_visibility(false)
 	return success
 
 # --- Road Drawing Mode ---

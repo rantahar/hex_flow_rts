@@ -487,6 +487,20 @@ func _move_to_next_tile():
 			_try_attack()
 		return
 
+	# Defense-in-depth: hold position unless a companion or structure is present.
+	if current_tile.structure == null:
+		var friendly_count := 0
+		var i_am_leader := true
+		for i in range(current_tile.occupied_slots.size()):
+			var occupant = current_tile.occupied_slots[i]
+			if occupant != null and is_instance_valid(occupant) and occupant.player_id == player_id:
+				friendly_count += 1
+				if i < formation_slot:
+					i_am_leader = false
+		if friendly_count < 2 or not i_am_leader:
+			is_moving = false
+			return
+
 	# 3. Check for available formation slot and claim it
 	if not try_claim_new_slot(next_tile, current_tile):
 		# Could not claim a slot on the next tile, likely full

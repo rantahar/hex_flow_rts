@@ -25,7 +25,7 @@ const UNIT_TYPES = {
 		# Maximum distance the unit can see, measured in hex units
 		"vision_range": 8.0,
 		# Resource cost to spawn this unit
-		"cost": 30,
+		"cost": 50,
 		# Tags used for unit classification and logic handling
 		"unit_types": ["military", "infantry"]
 	},
@@ -42,7 +42,7 @@ const UNIT_TYPES = {
 		"attack_range": 2.0,
 		"attack_cooldown": 5.0,
 		"vision_range": 10.0,
-		"cost": 100,
+		"cost": 150,
 		"unit_types": ["military", "tank"]
 	},
 }
@@ -70,12 +70,12 @@ const STRUCTURE_TYPES = {
 		"cost": 150,
 		"max_health": 50,
 		"produces_unit_type": "infantry",
-		"production_time": 2.0,
+		"production_time": 5.0,
 		"production_rate_max": 1.0,
 		"category": "improvement",
 		"y_offset_fraction": 0.0
 	},
-	
+
 	"tank_factory": {
 		"display_name": "Tank Factory",
 		"mesh_path": "res://assets/factory.obj",
@@ -84,7 +84,7 @@ const STRUCTURE_TYPES = {
 		"cost": 400,
 		"max_health": 100,
 		"produces_unit_type": "tank",
-		"production_time": 4.0,
+		"production_time": 10.0,
 		"production_rate_max": 1.0,
 		"category": "improvement",
 		"y_offset_fraction": 0.0
@@ -105,12 +105,12 @@ const STRUCTURE_TYPES = {
 	"cannon": {
 		"display_name": "Cannon",
 		"mesh_path": "res://assets/robot_simple.obj",
-		"size": 0.3,
-		"cost": 120,
+		"size": 0.25,
+		"cost": 300,
 		"max_health": 100,
-		"attack_damage": 25,
+		"attack_damage": 120,
 		"attack_range": 4,
-		"attack_cooldown": 1.5,
+		"attack_cooldown": 1.0,
 		"category": "improvement",
 		"y_offset_fraction": 0.0
 	},
@@ -121,7 +121,7 @@ const STRUCTURE_TYPES = {
 		"size": 0.3,
 		"cost": 200,
 		"max_health": 25,
-		"attack_damage": 40,
+		"attack_damage": 60,
 		"attack_range": 8,
 		"attack_cooldown": 3.0,
 		"aoe_radius": 1,
@@ -195,6 +195,11 @@ const RESOURCE_TICK_INTERVAL: float = 1.0
 # Retry delay (seconds) when a factory cannot afford its next unit
 const PRODUCTION_RETRY_INTERVAL: float = 1.0
 
+# Number of infantry each player's base spawns automatically at game start
+const INITIAL_RESERVE_SIZE: int = 20
+# Rate at which the initial reserve is spawned (units per second)
+const INITIAL_RESERVE_RATE: float = 1.0
+
 # Defines global map dimensions
 const MAP_WIDTH: int = 20
 const MAP_HEIGHT: int = 20
@@ -205,7 +210,7 @@ const PLAYER_TEMPLATES = [
 	{"display_name": "Blue Team",   "color": Color.BLUE,                 "type": "ai", "ai_type": "greedy"},
 	{"display_name": "Green Team",  "color": Color.GREEN,                "type": "ai", "ai_type": "defensive"},
 	{"display_name": "Yellow Team", "color": Color.YELLOW,               "type": "ai", "ai_type": "long_range"},
-	{"display_name": "Purple Team", "color": Color(0.5, 0.0, 0.5, 1.0), "type": "ai", "ai_type": "aggressive"},
+	{"display_name": "Purple Team", "color": Color(0.5, 0.0, 0.5, 1.0),  "type": "ai", "ai_type": "aggressive"},
 	{"display_name": "Orange Team", "color": Color.ORANGE,               "type": "ai", "ai_type": "greedy"},
 ]
 

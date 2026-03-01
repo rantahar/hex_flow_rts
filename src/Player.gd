@@ -17,9 +17,16 @@ var builders: Array = []
 var structures: Array[Structure] = []
 # Dictionary for O(1) structure lookup by grid coordinates: {Vector2i: Structure}
 var structures_by_coord: Dictionary = {}
+var road_construction_tiles: Array[Tile] = []
 var resources: float = 0.0
 var config: Dictionary = {} # Store player configuration for type checking, etc.
 var spawn_tile: Tile
+
+# Initial reserve spawning state
+var _reserve_count: int = 0
+var _reserve_total: int = 0
+var _reserve_map_node = null
+var _reserve_timer: Timer = null
 
 
 # We assume Unit.gd is used directly as the unit's class/resource definition.
@@ -122,6 +129,31 @@ func spawn_unit(hex_x: int = -1, hex_z: int = -1, map_node: Node3D = null, unit_
 	# Add the unit to the player's internal list for tracking and counting
 	units.append(unit)
 	return unit
+
+
+# Starts spawning an initial reserve of infantry at a fixed rate.
+# Called once at game start; stops automatically after `count` units are spawned.
+func start_initial_reserve_spawn(map_node: Node3D, count: int, rate: float) -> void:
+	_reserve_count = 0
+	_reserve_total = count
+	_reserve_map_node = map_node
+	_reserve_timer = Timer.new()
+	_reserve_timer.wait_time = 1.0 / rate
+	_reserve_timer.autostart = true
+	_reserve_timer.timeout.connect(_on_reserve_timer_timeout)
+	add_child(_reserve_timer)
+
+func _on_reserve_timer_timeout() -> void:
+	if _reserve_count >= _reserve_total:
+		_reserve_timer.stop()
+		_reserve_timer.queue_free()
+		_reserve_timer = null
+		return
+	# Spawn on the base tile itself. Formation slot will be -1 (base blocks slots),
+	# but current_tile is still set so the flow field immediately routes the unit out.
+	var unit = spawn_unit(-1, -1, _reserve_map_node, "infantry")
+	if unit:
+		_reserve_count += 1
 
 
 # Calculates the flow field for this player using the specified Grid.
@@ -300,6 +332,12 @@ func place_structure(structure_key: String, target_tile: Tile, map_node: Node3D,
 			push_warning("Player %d: No base found for construction queue." % id)
 		print("Player %d placed ghost structure '%s' at %s. Queued for construction. Remaining resources: %f" % [id, structure_key, target_tile.get_coords(), resources])
 
+	# Apply tile visual side-effects based on structure config
+	if structure_config.get("drill_hole", false):
+		target_tile.set_hole_visibility(true)
+	if structure_config.get("hide_tile", false):
+		target_tile.set_tile_visibility(false)
+
 	return true
 
 func get_structure_at_coords(coords: Vector2i) -> Structure:
@@ -343,6 +381,7 @@ func register_road_construction(tiles: Array):
 		# Add this player to the road builders list
 		if id not in road_tile.road_builders:
 			road_tile.road_builders.append(id)
+		road_construction_tiles.append(road_tile)
 
 func _remove_builder(builder: Builder):
 	"""

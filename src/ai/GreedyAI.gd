@@ -25,6 +25,15 @@ const THINK_INTERVAL: float = 5.0
 # 3 ensures both bases can fill their full ring-1 without overlap.
 const MIN_BASE_SPACING: int = 3
 
+# Expansion scoring weights — must sum to 1.0.
+const SCORE_W_PROXIMITY:  float = 0.4  # Prefer sites close to existing territory.
+const SCORE_W_SAFETY:     float = 0.4  # Prefer sites far from enemy threat.
+const SCORE_W_BUILDABLE:  float = 0.2  # Prefer sites with many buildable neighbors.
+
+# Normalisation bounds for scoring.
+const SCORE_MAX_DIST:      float = 30.0  # Euclidean upper bound for a 20x20 grid.
+const SCORE_MAX_FLOW_COST: float = 40.0  # Upper bound for terrain-weighted path cost.
+
 var _map_node: Node3D
 
 
@@ -94,47 +103,6 @@ func _fill_bases() -> bool:
 	return false
 
 
-# Returns true if every non-under-construction base has no free buildable
-# walkable neighbors remaining.
-func _all_bases_full() -> bool:
-	for structure in structures:
-		if structure.structure_type != "base":
-			continue
-		if structure.is_under_construction:
-			continue
-		if not _is_base_full(structure.current_tile):
-			return false
-	return true
-
-
-# True if all ring-1 neighbors of base_tile are either non-buildable,
-# non-walkable, or already occupied.
-func _is_base_full(base_tile: Tile) -> bool:
-	return _find_free_neighbor(base_tile) == null
-
-
-# True if any ring-1 neighbor of base_tile holds a drone_factory belonging
-# to this player.
-func _base_has_factory(base_tile: Tile) -> bool:
-	for neighbor in base_tile.neighbors:
-		if not is_instance_valid(neighbor):
-			continue
-		var s = neighbor.structure
-		if s and s.player_id == id and s.structure_type == "drone_factory":
-			return true
-	return false
-
-
-# Returns the first ring-1 neighbor that is walkable, buildable, and free.
-func _find_free_neighbor(center_tile: Tile) -> Tile:
-	for neighbor in center_tile.neighbors:
-		if not is_instance_valid(neighbor):
-			continue
-		if neighbor.walkable and neighbor.buildable and neighbor.structure == null:
-			return neighbor
-	return null
-
-
 # Attempts to place a new base at the best available expansion site.
 func _try_expand(grid) -> void:
 	if resources < GameData.STRUCTURE_TYPES["base"]["cost"]:
@@ -148,18 +116,20 @@ func _try_expand(grid) -> void:
 		print("GreedyAI (%s): no valid expansion site found." % name)
 
 
-# Finds the best tile for a new base:
-#   1. At least MIN_BASE_SPACING hex from any owned base (BFS exclusion).
-#   2. Highest distance from the enemy centroid (farthest from front line).
+# Finds the best tile for a new base using a weighted scoring system:
+#   - Proximity:   prefer sites close to existing own bases (contiguous expansion).
+#   - Safety:      prefer sites far from enemy threat, using the flow field's
+#                  terrain-weighted path cost to the nearest enemy as the measure.
+#   - Buildability: prefer sites with many buildable ring-1 neighbors (more mine slots).
 func _find_expansion_tile(grid) -> Tile:
-	# Build a forbidden set: all tiles within (MIN_BASE_SPACING - 1) steps of
-	# any owned base.
+	# Build a forbidden zone: all tiles within (MIN_BASE_SPACING - 1) BFS steps of
+	# any owned base, ensuring the new base's ring-1 won't overlap existing rings.
 	var forbidden: Dictionary = {}
+	var own_base_positions: Array[Vector2] = []
 	for structure in structures:
 		if structure.structure_type == "base" and not structure.is_under_construction:
 			_mark_forbidden_zone(structure.current_tile, MIN_BASE_SPACING - 1, forbidden)
-
-	var enemy_centroid: Vector2 = _get_enemy_centroid()
+			own_base_positions.append(Vector2(structure.current_tile.x, structure.current_tile.z))
 
 	var best_tile: Tile = null
 	var best_score: float = -INF
@@ -171,60 +141,34 @@ func _find_expansion_tile(grid) -> Tile:
 		if not tile.walkable or not tile.buildable or tile.structure != null:
 			continue
 
-		# Score = distance from enemy centroid (farther = safer expansion).
 		var pos := Vector2(tile.x, tile.z)
-		var score: float = pos.distance_to(enemy_centroid)
-		if score > best_score:
-			best_score = score
+
+		# Factor 1 — Proximity: closer to own territory is better.
+		var nearest_own: float = INF
+		for bp in own_base_positions:
+			nearest_own = min(nearest_own, pos.distance_to(bp))
+		var score_proximity: float = 1.0 - clamp(nearest_own / SCORE_MAX_DIST, 0.0, 1.0)
+
+		# Factor 2 — Safety: flow_field cost = terrain-weighted distance to nearest
+		# enemy (bases + units). Higher cost means farther from the front line.
+		# Falls back to 1.0 (maximum safety) if the flow field is not yet populated.
+		var flow_cost: float = flow_field.get_flow_cost(tile)
+		var score_safety: float = clamp(flow_cost / SCORE_MAX_FLOW_COST, 0.0, 1.0)
+
+		# Factor 3 — Buildability: count terrain-buildable ring-1 neighbors.
+		# Predicts future mine capacity regardless of current occupancy.
+		var buildable_count: int = 0
+		for neighbor in tile.neighbors:
+			if is_instance_valid(neighbor) and neighbor.buildable:
+				buildable_count += 1
+		var score_buildable := buildable_count / 6.0
+
+		var total: float = SCORE_W_PROXIMITY * score_proximity \
+				   + SCORE_W_SAFETY    * score_safety \
+				   + SCORE_W_BUILDABLE * score_buildable
+
+		if total > best_score:
+			best_score = total
 			best_tile = tile
 
 	return best_tile
-
-
-# BFS from center_tile outward up to `radius` steps, marking all visited
-# tile coords in `dict`.
-func _mark_forbidden_zone(center_tile: Tile, radius: int, dict: Dictionary) -> void:
-	var queue: Array = [[center_tile, 0]]
-	var visited: Dictionary = {center_tile.get_coords(): true}
-
-	while not queue.is_empty():
-		var entry: Array = queue.pop_front()
-		var tile: Tile = entry[0]
-		var dist: int = entry[1]
-
-		dict[tile.get_coords()] = true
-
-		if dist >= radius:
-			continue
-
-		for neighbor in tile.neighbors:
-			if not is_instance_valid(neighbor):
-				continue
-			var nc: Vector2i = neighbor.get_coords()
-			if not visited.has(nc):
-				visited[nc] = true
-				queue.append([neighbor, dist + 1])
-
-
-# Returns the average grid position (Vector2) of all enemy base tiles.
-# Falls back to a far-away point if no enemy bases exist.
-func _get_enemy_centroid() -> Vector2:
-	var game = get_parent()
-	if not is_instance_valid(game):
-		return Vector2(1000.0, 1000.0)
-
-	var total := Vector2.ZERO
-	var count: int = 0
-
-	for player in game.players:
-		if not is_instance_valid(player) or player.id == id:
-			continue
-		for structure in player.structures:
-			if structure.structure_type == "base" and not structure.is_under_construction:
-				total += Vector2(structure.current_tile.x, structure.current_tile.z)
-				count += 1
-
-	if count == 0:
-		return Vector2(1000.0, 1000.0)  # No known enemies; pick any far tile.
-
-	return total / float(count)
