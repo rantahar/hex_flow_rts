@@ -64,6 +64,48 @@ func _base_has_factory(base_tile: Tile) -> bool:
 	return false
 
 
+# True if any ring-1 neighbor of base_tile holds a tank_factory belonging
+# to this player.
+func _base_has_tank_factory(base_tile: Tile) -> bool:
+	for neighbor in base_tile.neighbors:
+		if not is_instance_valid(neighbor):
+			continue
+		var s = neighbor.structure
+		if s and s.player_id == id and s.structure_type == "tank_factory":
+			return true
+	return false
+
+
+# Counts how many owned structures of `type` are adjacent to base_tile.
+func _count_type_near_base(base_tile: Tile, type: String) -> int:
+	var count: int = 0
+	for neighbor in base_tile.neighbors:
+		if not is_instance_valid(neighbor):
+			continue
+		var s = neighbor.structure
+		if s and s.player_id == id and s.structure_type == type:
+			count += 1
+	return count
+
+
+# Counts all owned (non-under-construction) structures of the given type.
+func _count_structure_type(type: String) -> int:
+	var count: int = 0
+	for s in structures:
+		if s.structure_type == type and not s.is_under_construction:
+			count += 1
+	return count
+
+
+# Returns "drone_factory" or "tank_factory" based on which type this player
+# currently owns fewer of. Drones are preferred when counts are equal so the
+# first factory built is always infantry (to establish the frontline).
+func _choose_factory_type() -> String:
+	var drones := _count_structure_type("drone_factory")
+	var tanks  := _count_structure_type("tank_factory")
+	return "drone_factory" if drones <= tanks else "tank_factory"
+
+
 # Returns true if every non-under-construction base has no free buildable
 # walkable neighbors remaining.
 func _all_bases_full() -> bool:

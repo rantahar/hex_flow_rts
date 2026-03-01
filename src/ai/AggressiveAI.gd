@@ -27,9 +27,6 @@ extends AIPlayer
 
 const THINK_INTERVAL: float = 5.0
 const MAX_BASES: int = 2
-const FIRST_BASE_DRONE_FACTORIES: int = 2
-const FIRST_BASE_MINES: int = 4   # base(10) + 4 mines(20) = 30/sec covers 2 drone factories
-const SECOND_BASE_MINES: int = 3  # base(10) + 3 mines(15) = 25/sec covers 1 tank factory
 
 const SCORE_W_PROXIMITY:  float = 0.3
 const SCORE_W_AGGRESSION: float = 0.5
@@ -73,87 +70,36 @@ func _think():
 		_try_expand(grid)
 
 
-# Iterates owned bases in order and fills each one according to its role.
-# Returns true if any structure was placed this tick.
+# Iterates owned bases and fills each one. Returns true if any structure was placed.
 func _fill_all_bases() -> bool:
-	var base_index: int = 0
 	for structure in structures:
 		if structure.structure_type != "base" or structure.is_under_construction:
 			continue
-		if _fill_base(structure.current_tile, base_index == 0):
+		if _fill_base(structure.current_tile):
 			return true
-		base_index += 1
 	return false
 
 
-# Places the next structure for a single base according to build priority.
-# is_first_base: true for base 1 (drone rush), false for base 2 (tank push).
+# Places the next structure for a base: one factory (type balanced globally), then mines.
 # Returns true if a structure was placed.
-func _fill_base(base_tile: Tile, is_first_base: bool) -> bool:
-	var drone_factories: int = _count_type_near_base(base_tile, "drone_factory")
-	var tank_factories: int  = _count_type_near_base(base_tile, "tank_factory")
-	var mines: int           = _count_type_near_base(base_tile, "mine")
+func _fill_base(base_tile: Tile) -> bool:
 	var tile: Tile
 
-	if is_first_base:
-		# Step 1: Both drone factories first — burn starting gold on units.
-		if drone_factories < FIRST_BASE_DRONE_FACTORIES:
-			tile = _find_free_neighbor(base_tile)
-			if tile and place_structure("drone_factory", tile, _map_node):
-				print("AggressiveAI (%s): built drone_factory at base 1." % name)
-				return true
-
-		# Step 2: Mines to sustain production.
-		if mines < FIRST_BASE_MINES:
-			tile = _find_free_neighbor(base_tile)
-			if tile and place_structure("mine", tile, _map_node):
-				print("AggressiveAI (%s): built mine at base 1." % name)
-				return true
-
-		# Step 3: Fill remaining slots with more mines.
+	# One factory per base; choose whichever type the player has fewer of globally.
+	if _count_type_near_base(base_tile, "drone_factory") + _count_type_near_base(base_tile, "tank_factory") == 0:
+		var factory_type := _choose_factory_type()
 		tile = _find_free_neighbor(base_tile)
-		if tile and place_structure("mine", tile, _map_node):
+		if tile and place_structure(factory_type, tile, _map_node):
+			print("AggressiveAI (%s): built %s." % [name, factory_type])
 			return true
-	else:
-		# Step 1: Tank factory first for heavy units.
-		if tank_factories == 0:
-			tile = _find_free_neighbor(base_tile)
-			if tile and place_structure("tank_factory", tile, _map_node):
-				print("AggressiveAI (%s): built tank_factory at base 2." % name)
-				return true
 
-		# Step 2: Mines to sustain the tank factory.
-		if mines < SECOND_BASE_MINES:
-			tile = _find_free_neighbor(base_tile)
-			if tile and place_structure("mine", tile, _map_node):
-				print("AggressiveAI (%s): built mine at base 2." % name)
-				return true
-
-		# Step 3: Fill remaining slots with drone factories.
-		if drone_factories == 0:
-			tile = _find_free_neighbor(base_tile)
-			if tile and place_structure("drone_factory", tile, _map_node):
-				print("AggressiveAI (%s): built drone_factory at base 2." % name)
-				return true
-
-		# Step 4: Any leftover slots get more mines.
-		tile = _find_free_neighbor(base_tile)
-		if tile and place_structure("mine", tile, _map_node):
-			return true
+	# Fill remaining slots with mines.
+	tile = _find_free_neighbor(base_tile)
+	if tile and place_structure("mine", tile, _map_node):
+		print("AggressiveAI (%s): built mine." % name)
+		return true
 
 	return false
-
-
-# Counts how many owned structures of `structure_type` are adjacent to base_tile.
-func _count_type_near_base(base_tile: Tile, structure_type: String) -> int:
-	var count: int = 0
-	for neighbor in base_tile.neighbors:
-		if not is_instance_valid(neighbor):
-			continue
-		var s = neighbor.structure
-		if s and s.player_id == id and s.structure_type == structure_type:
-			count += 1
-	return count
 
 
 # Returns the total number of owned (non-under-construction) bases.

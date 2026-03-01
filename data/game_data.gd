@@ -196,7 +196,7 @@ const RESOURCE_TICK_INTERVAL: float = 1.0
 const PRODUCTION_RETRY_INTERVAL: float = 1.0
 
 # Number of infantry each player's base spawns automatically at game start
-const INITIAL_RESERVE_SIZE: int = 20
+const INITIAL_RESERVE_SIZE: int = 0
 # Rate at which the initial reserve is spawned (units per second)
 const INITIAL_RESERVE_RATE: float = 1.0
 

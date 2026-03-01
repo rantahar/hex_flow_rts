@@ -85,12 +85,13 @@ func _fill_bases() -> bool:
 
 		var base_tile: Tile = structure.current_tile
 
-		# Ensure each base has exactly one drone factory in its ring.
-		if not _base_has_factory(base_tile):
+		# One factory per base; choose whichever type the player has fewer of globally.
+		if _count_type_near_base(base_tile, "drone_factory") + _count_type_near_base(base_tile, "tank_factory") == 0:
+			var factory_type := _choose_factory_type()
 			var tile = _find_free_neighbor(base_tile)
 			if tile:
-				if place_structure("drone_factory", tile, _map_node):
-					print("GreedyAI (%s): built drone_factory near base at %s." % [name, base_tile.get_coords()])
+				if place_structure(factory_type, tile, _map_node):
+					print("GreedyAI (%s): built %s near base at %s." % [name, factory_type, base_tile.get_coords()])
 					return true
 
 		# Fill remaining free neighbors with mines.
