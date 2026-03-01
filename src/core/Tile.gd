@@ -49,6 +49,8 @@ var road_under_construction: bool = false
 var road_resources_pending: float = 0.0
 var road_resources_in_transit: float = 0.0  # Resources being carried by builders already sent
 var road_builders: Array[int] = []  # Player IDs building this road
+var _original_walkable: bool = true  # terrain state saved when road construction starts
+var _original_cost: float = 1.0     # terrain state saved when road construction starts
 
 # Strategic zoom dot (player-colored sphere, shown when camera is zoomed far out)
 var strategic_dot: MeshInstance3D = null
@@ -186,6 +188,8 @@ func set_tile_visibility(_is_visible: bool):
 		visible = _is_visible
 
 func set_road_under_construction(segment_cost: float = 0.0):
+	_original_walkable = walkable
+	_original_cost = cost
 	road_under_construction = true
 	road_resources_pending = segment_cost
 	_update_road_ghost_visual()
@@ -199,6 +203,8 @@ func set_road():
 	has_road = true
 	road_under_construction = false
 	road_hp = GameData.ROAD_CONFIG.max_hp
+	walkable = true
+	cost = GameData.ROAD_CONFIG.road_tile_cost
 	_update_road_visual()
 	# Also update neighbors so they draw connections to this tile
 	for neighbor in neighbors:
@@ -208,6 +214,8 @@ func set_road():
 func clear_road():
 	has_road = false
 	road_hp = 0.0
+	walkable = _original_walkable
+	cost = _original_cost
 	_remove_road_visual()
 	# Update neighbors to remove connections to this tile
 	for neighbor in neighbors:

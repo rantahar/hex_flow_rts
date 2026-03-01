@@ -121,14 +121,6 @@ func _base_has_cannon(base_tile: Tile) -> bool:
 	return false
 
 
-# True if any owned base is still under construction.
-func _has_base_under_construction() -> bool:
-	for structure in structures:
-		if structure.structure_type == "base" and structure.is_under_construction:
-			return true
-	return false
-
-
 # Attempts to place a new base at the best available expansion site.
 func _try_expand(grid) -> void:
 	if resources < GameData.STRUCTURE_TYPES["base"]["cost"]:

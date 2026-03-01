@@ -251,7 +251,7 @@ func _instantiate_tile(coords: Vector2i, tile_key: String) -> void:
 		mesh_tile.create_trimesh_collision()
 		tile_root = mesh_tile
 
-	tile_root.scale = Vector3.ONE * GameConfig.HEX_SCALE * 0.9
+	tile_root.scale = Vector3.ONE * GameConfig.HEX_SCALE
 	tile_root.rotation_degrees.y = 0.0
 	add_child(tile_root)
 

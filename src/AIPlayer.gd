@@ -106,6 +106,14 @@ func _choose_factory_type() -> String:
 	return "drone_factory" if drones <= tanks else "tank_factory"
 
 
+# True if any owned base is still under construction.
+func _has_base_under_construction() -> bool:
+	for structure in structures:
+		if structure.structure_type == "base" and structure.is_under_construction:
+			return true
+	return false
+
+
 # Returns true if every non-under-construction base has no free buildable
 # walkable neighbors remaining.
 func _all_bases_full() -> bool:

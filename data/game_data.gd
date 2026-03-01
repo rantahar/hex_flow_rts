@@ -108,7 +108,7 @@ const STRUCTURE_TYPES = {
 		"size": 0.25,
 		"cost": 300,
 		"max_health": 100,
-		"attack_damage": 120,
+		"attack_damage": 40,
 		"attack_range": 4,
 		"attack_cooldown": 1.0,
 		"category": "improvement",
@@ -118,10 +118,10 @@ const STRUCTURE_TYPES = {
 	"artillery": {
 		"display_name": "Artillery",
 		"mesh_path": "res://assets/robot_simple.obj",
-		"size": 0.3,
-		"cost": 200,
+		"size": 0.4,
+		"cost": 500,
 		"max_health": 25,
-		"attack_damage": 60,
+		"attack_damage": 20,
 		"attack_range": 8,
 		"attack_cooldown": 3.0,
 		"aoe_radius": 1,
@@ -225,6 +225,6 @@ static func make_player_configs(num: int) -> Array:
 
 # Default to 2 players for the start-menu demo; overwritten by _on_new_game_pressed before each game.
 static var PLAYER_CONFIGS: Array = [
-	{"id": 0, "display_name": "Red Team",  "color": Color.RED,  "starting_resources": 1000.0, "type": "human"},
+	{"id": 0, "display_name": "Red Team",  "color": Color.RED,  "starting_resources": 1000.0, "type": "ai", "ai_type": "aggressive"},
 	{"id": 1, "display_name": "Blue Team", "color": Color.BLUE, "starting_resources": 1000.0, "type": "ai", "ai_type": "greedy"},
 ]
