@@ -28,8 +28,8 @@ extends AIPlayer
 const THINK_INTERVAL: float = 5.0
 const MAX_BASES: int = 2
 
-const SCORE_W_PROXIMITY:  float = 0.3
-const SCORE_W_AGGRESSION: float = 0.5
+const SCORE_W_PROXIMITY:  float = 0.5
+const SCORE_W_AGGRESSION: float = 0.3
 const SCORE_W_BUILDABLE:  float = 0.2
 const SCORE_MAX_DIST:     float = 30.0
 const FORBIDDEN_RADIUS:   int   = 2  # Smaller than GreedyAI; allow forward bases.
@@ -85,8 +85,8 @@ func _fill_all_bases() -> bool:
 func _fill_base(base_tile: Tile) -> bool:
 	var tile: Tile
 
-	# One factory per base; choose whichever type the player has fewer of globally.
-	if _count_type_near_base(base_tile, "drone_factory") + _count_type_near_base(base_tile, "tank_factory") == 0:
+	# Two factories per base; choose whichever type the player has fewer of globally.
+	if _count_type_near_base(base_tile, "drone_factory") + _count_type_near_base(base_tile, "tank_factory") < 2:
 		var factory_type := _choose_factory_type()
 		tile = _find_free_neighbor(base_tile)
 		if tile and place_structure(factory_type, tile, _map_node):
