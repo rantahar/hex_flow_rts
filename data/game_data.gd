@@ -157,7 +157,7 @@ const TILES = {
 		"type_name": "grass",
 		"walk_cost": 1.0,
 		"walkable": true,
-		"weight": 5, # Higher probability
+		"weight": 20, # Higher probability
 		"buildable": true,
 	},
 	"dirt": {
@@ -165,7 +165,7 @@ const TILES = {
 		"type_name": "dirt",
 		"walk_cost": 1.0,
 		"walkable": true,
-		"weight": 5, # Higher probability
+		"weight": 20, # Higher probability
 		"buildable": true,
 	},
 	"mountain": {
@@ -200,23 +200,26 @@ const MAP_WIDTH: int = 20
 const MAP_HEIGHT: int = 20
 
 # Defines configuration data for players
-const PLAYER_CONFIGS = [
-	{
-		"id": 0,
-		"display_name": "Red Team",
-		"color": Color.RED,
-		"starting_resources": 1000.0,
-		"type": "human",
-		"spawn_coords": Vector2i(5, 5),
-		"target_coords": Vector2i(15, 15),
-	},
-	{
-		"id": 1,
-		"display_name": "Blue Team",
-		"color": Color.BLUE,
-		"starting_resources": 1000.0,
-		"type": "ai",
-		"spawn_coords": Vector2i(15, 15),
-		"target_coords": Vector2i(5, 5),
-	}
+const PLAYER_TEMPLATES = [
+	{"display_name": "Red Team",    "color": Color.RED,                  "type": "human"},
+	{"display_name": "Blue Team",   "color": Color.BLUE,                 "type": "ai", "ai_type": "greedy"},
+	{"display_name": "Green Team",  "color": Color.GREEN,                "type": "ai", "ai_type": "defensive"},
+	{"display_name": "Yellow Team", "color": Color.YELLOW,               "type": "ai", "ai_type": "long_range"},
+	{"display_name": "Purple Team", "color": Color(0.5, 0.0, 0.5, 1.0), "type": "ai", "ai_type": "aggressive"},
+	{"display_name": "Orange Team", "color": Color.ORANGE,               "type": "ai", "ai_type": "greedy"},
+]
+
+static func make_player_configs(num: int) -> Array:
+	var configs: Array = []
+	for i in range(num):
+		var t: Dictionary = PLAYER_TEMPLATES[i].duplicate()
+		t["id"] = i
+		t["starting_resources"] = 1000.0
+		configs.append(t)
+	return configs
+
+# Default to 2 players for the start-menu demo; overwritten by _on_new_game_pressed before each game.
+static var PLAYER_CONFIGS: Array = [
+	{"id": 0, "display_name": "Red Team",  "color": Color.RED,  "starting_resources": 1000.0, "type": "human"},
+	{"id": 1, "display_name": "Blue Team", "color": Color.BLUE, "starting_resources": 1000.0, "type": "ai", "ai_type": "greedy"},
 ]

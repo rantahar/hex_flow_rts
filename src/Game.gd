@@ -12,6 +12,11 @@ const GameConfig = preload("res://data/game_config.gd")
 const ResourceDisplay = preload("res://src/ResourceDisplay.gd")
 const BuildMenu = preload("res://src/BuildMenu.gd")
 
+const GreedyAI    = preload("res://src/ai/GreedyAI.gd")
+const DefensiveAI = preload("res://src/ai/DefensiveAI.gd")
+const LongRangeAI = preload("res://src/ai/LongRangeAI.gd")
+const AggressiveAI = preload("res://src/ai/AggressiveAI.gd")
+
 signal selection_changed(structures: Array[Structure])
 
 @onready var map_node = $Map
@@ -34,79 +39,63 @@ var game_over_message: Label = null
 
 var _is_strategic_zoom: bool = false
 
+# Start menu state — static so it survives scene reload
+static var _game_started: bool = false
+var start_menu_overlay: Control = null
+var credits_panel: Control = null
+
 func get_strategic_zoom() -> bool:
 	return _is_strategic_zoom
 
 # Clears existing players array and initializes players based on config.
 # player_configs: Array of Dictionary, e.g., [{id: 0, color: Color.RED, display_name: "Red Team"}]
 func initialize_players(player_configs: Array) -> void:
-	"""
-	Clears existing players and initializes new Player instances based on the provided configurations.
-	Sets up flow fields and adds player nodes to the scene tree.
-
-	Arguments:
-	- player_configs (Array): Array of player configuration dictionaries.
-	"""
 	players.clear()
-	
+
 	for config in player_configs:
 		var player_node
-		
+
 		var player_type = config.get("type", "human") # Default to human
-		
+
 		if player_type == "human":
 			player_node = Player.new(config["id"], config)
 		elif player_type == "ai":
-			player_node = AIPlayer.new(config["id"], config)
+			var ai_type = config.get("ai_type", "")
+			match ai_type:
+				"greedy":    player_node = GreedyAI.new(config["id"], config)
+				"defensive": player_node = DefensiveAI.new(config["id"], config)
+				"long_range": player_node = LongRangeAI.new(config["id"], config)
+				"aggressive": player_node = AggressiveAI.new(config["id"], config)
+				_:           player_node = AIPlayer.new(config["id"], config)
 		else:
 			push_error("Unknown player type '%s' found in config for Player ID %d." % [player_type, config["id"]])
 			continue
-		
+
 		# Set Node properties and Data class properties
 		player_node.id = config["id"]
 		player_node.name = config["display_name"] # Using display_name for Node name
-		
+
 		player_node.color = config["color"]
 		# player_node.target is set elsewhere, typically by user input.
 		player_node.flow_field = FlowField.new()
 		player_node.flow_field.player_id = player_node.id
 		# player_node.units and player_node.resources are initialized in Player.gd
-		
+
 		# Add Player node to the scene tree
 		add_child(player_node)
 		players.append(player_node)
-		
+
 
 # Returns a player object based on ID, assuming ID matches index for simplicity.
 func get_player(player_id: int) -> Player:
-	"""
-	Retrieves a player object by their ID.
-
-	Arguments:
-	- player_id (int): The ID of the player to retrieve.
-
-	Returns:
-	- Player: The Player instance corresponding to the ID, or null if not found.
-	"""
 	if player_id >= 0 and player_id < players.size():
 		return players[player_id]
-	
+
 	push_error("Attempted to access non-existent player with ID: %d" % player_id)
 	return null
 
 # Helper function to ensure a spawn tile is walkable, attempting to find a nearby tile if not.
 func _find_walkable_spawn_tile(grid: Grid, preferred_coords: Vector2i) -> Tile:
-	"""
-	Helper function to find a walkable spawn tile, starting at a preferred coordinate.
-	If the preferred tile is unwalkable, searches immediately adjacent neighbor tiles.
-
-	Arguments:
-	- grid (Grid): The grid instance containing all tiles.
-	- preferred_coords (Vector2i): The desired grid coordinates for the spawn tile.
-
-	Returns:
-	- Tile: A walkable Tile object, or null if no walkable tile is found nearby.
-	"""
 	var tile = grid.tiles.get(preferred_coords)
 	if tile and tile.walkable:
 		return tile
@@ -114,38 +103,25 @@ func _find_walkable_spawn_tile(grid: Grid, preferred_coords: Vector2i) -> Tile:
 	# If the preferred tile is not walkable or doesn't exist, search nearby neighbors (1-ring distance)
 	push_warning("Preferred spawn tile (%s) is not walkable. Searching neighbors..." % preferred_coords)
 
-	# We need Tile coordinates and neighbor data to properly check neighbors.
-	# We will retrieve the Tile object first, if it exists.
 	if tile:
 		for neighbor_tile in tile.neighbors:
 			if neighbor_tile.walkable:
 				push_warning("Found walkable spawn tile at (%s)." % neighbor_tile.get_coords())
 				return neighbor_tile
-	
+
 	push_error("Could not find a walkable spawn tile near %s." % preferred_coords)
 	return null
 
 # Helper function to find the first walkable, un-occupied neighbor tile.
 func _find_free_neighbor_tile(grid: Grid, center_tile: Tile) -> Tile:
-	"""
-	Searches immediately adjacent neighbor tiles for one that is walkable and
-	not occupied by a structure.
-
-	Arguments:
-	- grid (Grid): The grid instance. (Currently unused but kept for consistency)
-	- center_tile (Tile): The tile whose neighbors are checked.
-
-	Returns:
-	- Tile: A free, walkable neighbor tile, or null.
-	"""
 	if not center_tile:
 		return null
-		
+
 	for neighbor_tile in center_tile.neighbors:
 		# Check if tile is walkable and free of structures
 		if neighbor_tile.walkable and neighbor_tile.structure == null:
 			return neighbor_tile
-			
+
 	return null
 
 # Helper function to find the human player instance
@@ -153,12 +129,12 @@ var _human_player: Player = null # Cache the human player instance
 func _get_human_player() -> Player:
 	if _human_player != null:
 		return _human_player
-		
+
 	for p in players:
 		if is_instance_valid(p) and p.config.get("type") == "human":
 			_human_player = p
 			return _human_player
-			
+
 	push_warning("No human player found in configuration.")
 	return null
 
@@ -177,9 +153,6 @@ func set_game_state(new_state: GameState):
 # --- Structure Selection Management ---
 
 func select_structure(structure: Structure, multi_select: bool = false):
-	"""
-	Selects a structure. If multi_select is false, clears previous selection.
-	"""
 	if not multi_select:
 		clear_selection()
 
@@ -191,9 +164,6 @@ func select_structure(structure: Structure, multi_select: bool = false):
 	selection_changed.emit(selected_structures)
 
 func deselect_structure(structure: Structure):
-	"""
-	Removes a structure from the selection.
-	"""
 	if structure in selected_structures:
 		selected_structures.erase(structure)
 		structure.set_selected(false)
@@ -201,9 +171,6 @@ func deselect_structure(structure: Structure):
 	selection_changed.emit(selected_structures)
 
 func clear_selection():
-	"""
-	Clears all selected structures.
-	"""
 	for structure in selected_structures:
 		structure.set_selected(false)
 
@@ -211,9 +178,6 @@ func clear_selection():
 	selection_changed.emit(selected_structures)
 
 func select_all_of_type(structure_type: String):
-	"""
-	Selects all structures of the specified type owned by the human player.
-	"""
 	clear_selection()
 	var human_player = _get_human_player()
 
@@ -308,47 +272,190 @@ func _on_structure_destroyed(structure: Structure):
 	call_deferred("check_victory_defeat_conditions")
 
 func _ready() -> void:
-	"""
-	Called when the node enters the scene tree for the first time.
-	Initializes players, sets targets and spawn points, calculates initial flow fields,
-	and initiates the post-ready setup after a brief delay.
-	"""
+	if not _game_started:
+		_start_menu_ready()
+	else:
+		_game_ready()
 
-	# Initialize players from centralized data
-	initialize_players(GameData.PLAYER_CONFIGS)
-	
-	# Cache human player reference
-	var human_player = _get_human_player()
-	
-	# Set player targets (currently hardcoded as they were not moved to GameData)
-	var player0 = get_player(0)
-	var player1 = get_player(1)
+# ─── Start menu mode ──────────────────────────────────────────────────────────
+
+func _start_menu_ready() -> void:
+	"""Initializes AI-only players for the background demo, then shows the start menu."""
+	# Build AI-only configs by converting all player entries to type "ai"
+	var ai_only_configs: Array = []
+	for config in GameData.PLAYER_CONFIGS:
+		var ai_config = config.duplicate()
+		ai_config["type"] = "ai"
+		ai_only_configs.append(ai_config)
+
+	initialize_players(ai_only_configs)
 
 	var grid = map_node.get_node("Grid")
-	
-	# Coordinates for testing spawning and targeting (20x20 map)
-	const P0_TARGET_COORDS = Vector2i(15, 15)
-	const P1_TARGET_COORDS = Vector2i(5, 5)
-	const P0_SPAWN_COORDS = Vector2i(5, 5)
-	const P1_SPAWN_COORDS = Vector2i(15, 15)
+	var map_gen: MapGenerator = map_node.get_node("MapGenerator")
+	var spawns: Array[Vector2i] = map_gen.spawn_coords
 
-	# Set player targets and spawn tiles
-	if player0 and grid:
-		player0.target = P0_TARGET_COORDS
-		player0.spawn_tile = _find_walkable_spawn_tile(grid, P0_SPAWN_COORDS)
-		if player0.spawn_tile:
-			player0.calculate_flow(grid) 
-		
-	if player1 and grid:
-		player1.target = P1_TARGET_COORDS
-		player1.spawn_tile = _find_walkable_spawn_tile(grid, P1_SPAWN_COORDS)
-		if player1.spawn_tile:
-			player1.calculate_flow(grid)
+	for i in range(players.size()):
+		var player = get_player(i)
+		var target_idx = (i + 1) % spawns.size()
+		if player and grid and i < spawns.size():
+			player.target = spawns[target_idx]
+			player.spawn_tile = _find_walkable_spawn_tile(grid, spawns[i])
+			if player.spawn_tile:
+				player.calculate_flow(grid)
+
+	await get_tree().process_frame
+
+	# Spawn bases for each AI player
+	for player in players:
+		if not is_instance_valid(player) or not player.spawn_tile:
+			continue
+		var success = player.place_structure("base", player.spawn_tile, map_node, true)
+		if not success:
+			push_error("Failed to place start-menu AI base for Player %d." % player.id)
+			continue
+		if player is AIPlayer:
+			player.start_turn(map_node)
+
+	# Connect strategic zoom so the camera still works
+	if $Camera3D.has_signal("strategic_zoom_changed"):
+		$Camera3D.strategic_zoom_changed.connect(_on_strategic_zoom_changed)
+
+	# Show the start menu overlay
+	_setup_start_menu()
+	canvas_layer.add_child(start_menu_overlay)
+
+	# Start AI timers after the usual startup delay
+	await get_tree().create_timer(GameData.START_DELAY_SECONDS).timeout
+	_post_ready_setup()
+
+func _setup_start_menu() -> void:
+	"""Creates the start menu overlay programmatically."""
+	start_menu_overlay = Control.new()
+	start_menu_overlay.name = "StartMenuOverlay"
+	start_menu_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	start_menu_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	# Semi-transparent dark background
+	var bg = ColorRect.new()
+	bg.color = Color(0, 0, 0, 0.65)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	start_menu_overlay.add_child(bg)
+
+	# Center everything
+	var center = CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	start_menu_overlay.add_child(center)
+
+	var outer_vbox = VBoxContainer.new()
+	outer_vbox.add_theme_constant_override("separation", 40)
+	center.add_child(outer_vbox)
+
+	# Title
+	var title = Label.new()
+	title.text = "Hex Flow RTS"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 64)
+	title.add_theme_color_override("font_color", Color.GOLD)
+	outer_vbox.add_child(title)
+
+	# Main buttons
+	var buttons_vbox = VBoxContainer.new()
+	buttons_vbox.add_theme_constant_override("separation", 16)
+	outer_vbox.add_child(buttons_vbox)
+
+	var new_game_btn = Button.new()
+	new_game_btn.text = "New Game"
+	new_game_btn.custom_minimum_size = Vector2(240, 55)
+	new_game_btn.pressed.connect(_on_new_game_pressed)
+	buttons_vbox.add_child(new_game_btn)
+
+	var credits_btn = Button.new()
+	credits_btn.text = "Credits"
+	credits_btn.custom_minimum_size = Vector2(240, 55)
+	credits_btn.pressed.connect(_on_credits_button_pressed)
+	buttons_vbox.add_child(credits_btn)
+
+	var quit_btn = Button.new()
+	quit_btn.text = "Quit"
+	quit_btn.custom_minimum_size = Vector2(240, 55)
+	quit_btn.pressed.connect(_on_quit_pressed)
+	buttons_vbox.add_child(quit_btn)
+
+	# Credits panel (hidden by default)
+	credits_panel = PanelContainer.new()
+	credits_panel.custom_minimum_size = Vector2(480, 0)
+	credits_panel.hide()
+	outer_vbox.add_child(credits_panel)
+
+	var credits_inner = VBoxContainer.new()
+	credits_inner.add_theme_constant_override("separation", 12)
+	credits_panel.add_child(credits_inner)
+
+	var credits_title = Label.new()
+	credits_title.text = "Credits"
+	credits_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	credits_title.add_theme_font_size_override("font_size", 28)
+	credits_inner.add_child(credits_title)
+
+	var sep = HSeparator.new()
+	credits_inner.add_child(sep)
+
+	for line in [
+		"Tile art: Kenney (kenney.nl)",
+		"Source code:",
+		"  github.com/rantahar/hex_flow_rts",
+		"License: MIT",
+	]:
+		var lbl = Label.new()
+		lbl.text = line
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		credits_inner.add_child(lbl)
+
+	var back_btn = Button.new()
+	back_btn.text = "Close"
+	back_btn.custom_minimum_size = Vector2(120, 40)
+	back_btn.pressed.connect(_on_credits_button_pressed)
+	credits_inner.add_child(back_btn)
+
+func _on_new_game_pressed() -> void:
+	GameData.PLAYER_CONFIGS = GameData.make_player_configs(randi_range(2, 6))
+	Game._game_started = true
+	get_tree().reload_current_scene()
+
+func _on_credits_button_pressed() -> void:
+	if is_instance_valid(credits_panel):
+		credits_panel.visible = not credits_panel.visible
+
+# ─── Full game mode ───────────────────────────────────────────────────────────
+
+func _game_ready() -> void:
+	"""Full game initialization (human + AI players). Called when _game_started is true."""
+	# Initialize players from centralized data
+	initialize_players(GameData.PLAYER_CONFIGS)
+
+	# Cache human player reference
+	var human_player = _get_human_player()
+
+	var grid = map_node.get_node("Grid")
+
+	# Read spawn coords chosen by the map generator so spawns vary each game
+	var map_gen: MapGenerator = map_node.get_node("MapGenerator")
+	var spawns: Array[Vector2i] = map_gen.spawn_coords
+
+	# Set player targets and spawn tiles (each player targets the next player's spawn in a ring)
+	for i in range(players.size()):
+		var player = get_player(i)
+		var target_idx = (i + 1) % spawns.size()
+		if player and grid and i < spawns.size():
+			player.target = spawns[target_idx]
+			player.spawn_tile = _find_walkable_spawn_tile(grid, spawns[i])
+			if player.spawn_tile:
+				player.calculate_flow(grid)
 
 	# Wait for physics engine to initialize collision shapes
 	await get_tree().process_frame
 
-	# Task 5: Spawn initial bases for each player (after world is ready)
+	# Spawn initial bases for each player
 	for player in players:
 		if not is_instance_valid(player) or not player.spawn_tile:
 			continue
@@ -367,7 +474,6 @@ func _ready() -> void:
 
 		# 3. Call AI start turn logic if applicable
 		if player.config.get("type") == "ai":
-			# Ensure we only call this on AI players
 			if player is AIPlayer:
 				player.start_turn(map_node)
 			else:
@@ -376,14 +482,13 @@ func _ready() -> void:
 	# Set the human player reference on the StructurePlacer instance
 	if is_instance_valid(structure_placer) and is_instance_valid(human_player):
 		structure_placer.set_human_player(human_player)
-		
+
 	# Setup StructurePlacer with necessary references
 	if is_instance_valid(structure_placer) and is_instance_valid(grid):
 		structure_placer.setup(grid)
 
 	# UI Setup for the human player
 	if is_instance_valid(human_player) and is_instance_valid(canvas_layer):
-		# Paths assume CanvasLayer is a direct child of Game, and TopLeftUI contains both menus.
 		var resource_display = canvas_layer.get_node_or_null("TopLeftUI/ResourceDisplay")
 		var build_menu = canvas_layer.get_node_or_null("TopLeftUI/BuildMenu")
 
@@ -397,8 +502,6 @@ func _ready() -> void:
 		if is_instance_valid(build_menu) and build_menu is BuildMenu:
 			build_menu.setup(human_player)
 
-			# --- Building UI Signal Handling ---
-			# Connect the BuildMenu's selected signal to the placement handler
 			if build_menu.has_signal("structure_selected"):
 				build_menu.structure_selected.connect(_on_structure_selected)
 			if build_menu.has_signal("road_build_requested"):
@@ -425,17 +528,12 @@ func _ready() -> void:
 
 	# Wait for specified delay before starting visualization setup
 	await get_tree().create_timer(GameData.START_DELAY_SECONDS).timeout
-	
+
 	_post_ready_setup()
 
 # --- Placement Mode Handling ---
 
 func _on_structure_selected(structure_type: String):
-	"""
-	Initiates structure placement mode for the human player.
-	Exits any previous placement mode before entering the new one.
-	"""
-
 	if is_instance_valid(structure_placer):
 		# Exit any previous placement mode
 		if structure_placer.is_active():
@@ -461,16 +559,13 @@ func _on_road_build_requested():
 		print("Game: Entered road drawing mode.")
 
 func _on_hex_clicked(tile: Tile, button_index: int):
-	"""
-	Handles a click on a hexagonal tile, primarily for structure placement confirmation, right-click cancellation, and selection.
-	"""
 	# Ignore clicks during game over
 	if game_state != GameState.PLAYING:
 		return
 
 	if not is_instance_valid(tile):
 		return
-		
+
 	var coords = tile.get_coords()
 	var human_player = _get_human_player()
 
@@ -520,64 +615,57 @@ func _on_hex_clicked(tile: Tile, button_index: int):
 				clear_selection()
 				return
 
-	# Clicking an empty tile or non-player-owned entity (if not handled by RTSCamera for units): clear selection
+	# Clicking an empty tile or non-player-owned entity: clear selection
 	if not selected_structures.is_empty():
 		clear_selection()
 		print("Game: Selection cleared.")
-		
-	# Allow RTSCamera to handle the click (e.g., unit movement/selection).
-	pass
-	
 
-# Adds the raycast logic for mouse hover detection (Task 2 refactoring)
+	pass
+
+
+# Adds the raycast logic for mouse hover detection
 func _get_hovered_tile() -> Tile:
 	var viewport = get_viewport()
 	var camera = $Camera3D
 	var grid = map_node.get_node_or_null("Grid")
-	
+
 	if not is_instance_valid(camera) or not is_instance_valid(grid):
 		return null
-	
+
 	var space_state = get_world_3d().direct_space_state
 	var mouse_pos = viewport.get_mouse_position()
 	var ray_origin = camera.project_ray_origin(mouse_pos)
 	var ray_end = camera.project_ray_normal(mouse_pos) * 1000.0 + ray_origin
-	
+
 	var query = PhysicsRayQueryParameters3D.create(ray_origin, ray_end)
 	var intersection = space_state.intersect_ray(query)
-	
+
 	if intersection:
 		var collider = intersection.collider
 		var tile_coords: Vector2i = Vector2i(-1, -1)
-		
-		# Traverse up the tree until a registered StaticBody3D tile node is found.
-		# This replicates the robust clicking logic from RTSCamera.gd.
+
 		var current_node: Node = collider
-		var tile_node: Tile = null # Changed type hint
-		
+		var tile_node: Tile = null
+
 		while current_node:
-			# NOTE: Assuming tiles are registered in Grid
-			if current_node is Tile: # Check for Tile class instead of StaticBody3D
+			if current_node is Tile:
 				tile_coords = grid.find_tile_by_node(current_node)
 				if tile_coords != Vector2i(-1, -1):
 					tile_node = current_node
 					break
-			
-			# Optimization: Stop searching if we hit the top-level scene/map node
-			if current_node.get_parent() is not Node: # Check if parent is null or not a regular node
+
+			if current_node.get_parent() is not Node:
 				break
-				
+
 			current_node = current_node.get_parent()
-		
+
 		if tile_coords != Vector2i(-1, -1):
-			# Look up Tile object
 			return grid.tiles.get(tile_coords)
-	
+
 	return null
 
 func _setup_game_over_overlay():
 	"""Creates the game over overlay UI programmatically."""
-	# Create main overlay control
 	game_over_overlay = Control.new()
 	game_over_overlay.name = "GameOverOverlay"
 	game_over_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -685,23 +773,19 @@ func _process(delta: float) -> void:
 
 # Initializes flow fields and visualization after a delay
 func _post_ready_setup() -> void:
-	"""
-	Initializes periodic timers for flow field recalculation, visualization cycling, and game clock.
-	Called after the map and players are fully set up.
-	"""
 	# Initialize flow fields
 	player_visualizers.resize(1)
-	
+
 	var visualizer = map_node.get_node("FlowVisualizer")
 	player_visualizers[0] = visualizer
-	
+
 	# Setup flow recalculation timer (needed for dynamic flow costs like unit density)
 	flow_recalculation_timer = Timer.new()
 	flow_recalculation_timer.wait_time = GameConfig.FLOW_RECALC_INTERVAL
 	flow_recalculation_timer.autostart = true
 	flow_recalculation_timer.timeout.connect(_on_flow_recalculation_timer_timeout)
 	add_child(flow_recalculation_timer)
-	
+
 	# Setup visualization timer
 	visualization_timer = Timer.new()
 	visualization_timer.wait_time = 2.0
@@ -715,68 +799,52 @@ func _post_ready_setup() -> void:
 	game_clock_timer.autostart = true
 	game_clock_timer.timeout.connect(_on_game_clock_timer_timeout)
 	add_child(game_clock_timer)
-	
+
 	current_visualization_player = 1
 	_on_visualization_timer_timeout()
 
 # Cycles visualization between players P0 and P1
 func _on_visualization_timer_timeout():
-	"""
-	Timer callback to cycle the flow field visualization between different players.
-	Updates the FlowFieldVisualizer node to display the current player's flow field.
-	"""
 	var next_player_id = (current_visualization_player + 1) % players.size()
 	current_visualization_player = next_player_id
-	
+
 	if current_visualization_player >= players.size():
 		push_error("Game: Invalid player index %d" % current_visualization_player)
 		return
-		
+
 	var current_player: Player = players[current_visualization_player]
-	
-	# Validation: check player exists
+
 	if not current_player:
 		push_error("Game: Player %d is null." % current_visualization_player)
 		return
-		
-	# Validation: check player.flow_field not null
+
 	var current_flow = current_player.flow_field
 	if not current_flow:
 		push_error("Game: Flow field for Player %d is not initialized" % current_visualization_player)
 		return
-		
-	# Check if a visualizer is registered. We currently only support one visualizer.
+
 	if player_visualizers.is_empty() or player_visualizers[0] == null:
 		return
-		
+
 	var current_visualizer = player_visualizers[0]
-	var grid = map_node.get_node("Grid") # Need grid reference here
-	
-	# Update the visualizer's reference to the current player's flow field
+	var grid = map_node.get_node("Grid")
+
 	current_visualizer.update_visualization(current_flow, grid, current_visualization_player)
 
 
 # Recalculates flow fields for all players periodically
 func _on_flow_recalculation_timer_timeout():
-	"""
-	Timer callback to periodically trigger flow field recalculation for all active players.
-	This is important for handling dynamic map costs (e.g., changing unit density).
-	"""
 	var grid = map_node.get_node("Grid")
 	if not grid:
 		push_error("Game: Grid node missing during flow recalculation.")
 		return
-		
+
 	for player in players:
 		if is_instance_valid(player):
 			player.calculate_flow(grid)
 
 # Called every second to update game time and print status
 func _on_game_clock_timer_timeout() -> void:
-	"""
-	Timer callback executed every second to update the in-game clock and display
-	the current game time and total unit count.
-	"""
 	game_time_seconds += 1
 	var minutes = floor(game_time_seconds / 60)
 	var seconds = game_time_seconds % 60

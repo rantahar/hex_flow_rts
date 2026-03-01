@@ -18,18 +18,22 @@
 - **Phase 5 (Economy & Structures)**: COMPLETE
 - **Phase 6 (Builder Movement Refactoring)**: COMPLETE
 - **Phase 7 (UI & Structure Info Panel)**: COMPLETE
-- **Phase 8 (Map & AI — Required Before Publishing)**: PENDING
+- **Phase 8 (Map & AI — Required Before Publishing)**: IN PROGRESS
 
 # 3. Completed Systems
 
-## 3.1. Map Generation (Phase 1)
+## 3.1. Map Generation (Phase 1 + Phase 8 partial)
 
 - Hexagonal grid procedural generation using Odd-R offset coordinates
 - Physics-based tile interaction via `StaticBody3D` with trimesh collision
-- Support for multiple tile types (grass, dirt, stone, water)
+- Support for multiple tile types (grass, dirt, mountain, water)
 - Kenney assets with 0.577 scaling factor
-- `MapGenerator.gd` creates visual mesh instances
-- `Grid.gd` maintains logical tile data structure
+- `MapGenerator.gd` creates visual mesh instances; `Grid.gd` maintains logical tile data
+- **Procedural map types** (chosen randomly each game): island, coast, river, lake, open
+- **Mountain ranges**: random walk of 6–10 tiles with 30% direction deviation
+- **Neighbor-influenced tile fill**: each unassigned tile picks type weighted by adjacent tiles (clustering effect)
+- **Spawn placement**: finds N grass tiles at least `MIN_SPAWN_DISTANCE` (5) hexes apart; clears adjacent mountains/water for safety
+- buildable tiles use CSG mesh; non-buildable (mountain/water) use simple `MeshInstance3D` with trimesh collision
 
 ## 3.2. Camera System (Phase 1)
 
@@ -152,7 +156,7 @@
 - Base counting logic that correctly excludes under-construction bases
 - Signal system for structure destruction detection and state checking
 
-## 3.14. Structure Info Panel (Phase 7)
+## 3.13b. Structure Info Panel (Phase 7)
 
 - `ProductionControlUI.gd` shows a dedicated panel when one or more structures are selected
 - Displays structure name, production cost and rate (e.g. "producing: infantry (30)"), resource generation rate (+X/sec), attack damage and range, and under-construction status
@@ -162,7 +166,15 @@
 - Production progress bar (visible for factories only)
 - Connected to `Game.gd`'s `selection_changed(structures: Array[Structure])` signal
 
-## 3.13. Debug Visualization
+## 3.13. Start Menu & Game Setup (Phase 8 partial)
+
+- Start menu overlay shown before game begins, with an AI-only background demo battle running behind it
+- Buttons: **New Game** (triggers game), **Credits** (expandable panel), **Quit**
+- "New Game" picks a random player count (2–6) via `GameData.make_player_configs(randi_range(2, 6))` and stores it in the static `GameData.PLAYER_CONFIGS` before reloading the scene, so `MapGenerator` sees the correct spawn count
+- **Player templates**: up to 6 players with distinct colors — Red (human), Blue, Green, Yellow, Purple, Orange (all AI)
+- Each player `i` targets `spawns[(i+1) % n]` in a ring, which reduces to the original two-player mutual targeting when `n == 2`
+
+## 3.15. Debug Visualization
 
 - Flow field arrow visualization with color gradients
 - Per-player color schemes (P0: green/yellow/red, P1: blue/cyan/magenta)
@@ -239,7 +251,9 @@ data/
 │   ├── UNIT_TYPES          - Unit definitions (infantry, tank, scout)
 │   ├── STRUCTURE_TYPES     - Structure definitions (base, drone_factory)
 │   ├── TILES               - Tile type definitions
-│   ├── PLAYER_CONFIGS      - Player setup
+│   ├── PLAYER_TEMPLATES    - 6 player color/name slots
+│   ├── PLAYER_CONFIGS      - Active player setup (static var, set at game start)
+│   ├── make_player_configs - Generates N configs from templates
 │   └── Map constants
 └── game_config.gd          - Gameplay tuning constants
 ```
@@ -287,16 +301,25 @@ game.tscn
   - Production progress bar for factories
   - Driven by `Game.gd`'s `selection_changed` signal
 
-## 6.4. Phase 8: Map & AI (Required Before Publishing)
+## 6.4. Phase 8: Map & AI (IN PROGRESS)
 
-- **Map generator improvements**: More varied and interesting procedural maps — varied terrain distribution, choke points, resource placement strategy, visual variety
-- **AI improvements**: More capable and varied AI behaviors — better build order decisions, strategic structure placement, adaptive responses to player actions
+**Completed:**
+- Procedural map type selection (island, coast, river, lake, open) — varies water/terrain layout each game
+- Mountain range generator — random walk of 6–10 tiles with directional drift
+- Neighbor-influenced tile fill — produces natural terrain clustering
+- Procedural spawn placement with minimum spacing and safety clearance
+- Start menu with AI background demo, Credits panel, and Quit
+- Random 2–6 player count chosen at "New Game", with 6 distinct player color slots
+
+**Remaining:**
+- AI improvements: better build order decisions, strategic structure placement, adaptive responses to player actions
+- Optional: player count selection in the start menu (currently random)
 
 # 7. Known Issues and Limitations
 
 ## 7.1. Current Limitations
 
-- Hardcoded 2-player setup for testing
+- Random 2–6 player count; no player count selection UI yet
 - Limited UI (resource display, build menu, and production control)
 - No save/load system
 
