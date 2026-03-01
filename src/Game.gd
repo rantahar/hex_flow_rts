@@ -810,6 +810,14 @@ func _post_ready_setup() -> void:
 	game_clock_timer.timeout.connect(_on_game_clock_timer_timeout)
 	add_child(game_clock_timer)
 
+	# Setup construction recovery timer — rebuilds each player's road/structure queues
+	# from ground truth every 3 seconds, handling dead builders and stale counts
+	var construction_recovery_timer = Timer.new()
+	construction_recovery_timer.wait_time = 3.0
+	construction_recovery_timer.autostart = true
+	construction_recovery_timer.timeout.connect(_on_construction_recovery_timeout)
+	add_child(construction_recovery_timer)
+
 	current_visualization_player = 1
 	_on_visualization_timer_timeout()
 
@@ -852,6 +860,41 @@ func _on_flow_recalculation_timer_timeout():
 	for player in players:
 		if is_instance_valid(player):
 			player.calculate_flow(grid)
+
+func _on_construction_recovery_timeout() -> void:
+	var grid = map_node.get_node_or_null("Grid")
+	if not is_instance_valid(grid):
+		return
+
+	for player in players:
+		if not is_instance_valid(player):
+			continue
+
+		# Rebuild road_construction_tiles from ground truth
+		player.road_construction_tiles.clear()
+		for tile in grid.tiles.values():
+			if is_instance_valid(tile) and tile.road_under_construction \
+					and player.id in tile.road_builders:
+				player.road_construction_tiles.append(tile)
+
+		# Recalculate road in-transit counts from active builders only
+		for tile in player.road_construction_tiles:
+			tile.road_resources_in_transit = 0.0
+		for builder in player.builders:
+			if is_instance_valid(builder) and not is_instance_valid(builder.target_structure) \
+					and is_instance_valid(builder.target_tile) \
+					and builder.target_tile.road_under_construction:
+				builder.target_tile.road_resources_in_transit += builder.resources_carried
+
+		# Recalculate structure in-transit counts from active builders only
+		for structure in player.structures:
+			if is_instance_valid(structure) and structure.is_under_construction:
+				structure.resources_in_transit = 0.0
+		for builder in player.builders:
+			if is_instance_valid(builder) and is_instance_valid(builder.target_structure) \
+					and builder.target_structure.is_under_construction:
+				builder.target_structure.resources_in_transit += builder.resources_carried
+
 
 # Called every second to update game time and print status
 func _on_game_clock_timer_timeout() -> void:

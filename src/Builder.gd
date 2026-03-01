@@ -237,11 +237,14 @@ func _on_arrival():
 					print("Builder (Player %d): Structure %s already completed. Refunded %.1f resources." % [player_id, target_structure.display_name, resources_carried])
 			target_structure.resources_in_transit = maxf(0.0, target_structure.resources_in_transit - resources_carried)
 	elif is_instance_valid(target_tile):
-		# Road construction: complete the road segment
+		# Road construction: deliver resources, complete only when fully paid
 		if target_tile.road_under_construction:
-			target_tile.road_resources_in_transit -= resources_carried
-			target_tile.complete_road_construction()
-			print("Builder (Player %d): Completed road at %s" % [player_id, target_tile.get_coords()])
+			target_tile.road_resources_in_transit = maxf(0.0, target_tile.road_resources_in_transit - resources_carried)
+			target_tile.road_resources_pending = maxf(0.0, target_tile.road_resources_pending - resources_carried)
+			print("Builder (Player %d): Delivered %.1f to road at %s (pending: %.1f)" % [player_id, resources_carried, target_tile.get_coords(), target_tile.road_resources_pending])
+			if target_tile.road_resources_pending <= 0:
+				target_tile.complete_road_construction()
+				print("Builder (Player %d): Completed road at %s" % [player_id, target_tile.get_coords()])
 		else:
 			# Road already completed - refund resources
 			var game_node = get_parent().get_parent()

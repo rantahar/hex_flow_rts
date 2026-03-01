@@ -289,12 +289,11 @@ func _on_builder_spawn_timeout():
 		})
 
 	# Check road construction tiles registered by this player
-	var stale: Array[Tile] = []
+	# (The global construction_recovery_timer in Game.gd keeps this list accurate)
 	for tile in player.road_construction_tiles:
 		if not is_instance_valid(tile) \
 				or not tile.road_under_construction \
 				or player_id not in tile.road_builders:
-			stale.append(tile)
 			continue
 		if tile.road_resources_pending <= 0:
 			continue
@@ -320,10 +319,6 @@ func _on_builder_spawn_timeout():
 			"distance": road_dist,
 			"target_tile": tile
 		})
-
-	# Lazy cleanup of completed road tiles
-	for tile in stale:
-		player.road_construction_tiles.erase(tile)
 
 	if requests.is_empty():
 		return
@@ -495,10 +490,18 @@ func _try_attack():
 	var target_world = Vector3(target_tile.world_pos.x, position.y, target_tile.world_pos.z)
 	_rotate_to_face(target_world - position)
 
-	# Deal damage to all enemy units on the tile
+	# Deal damage to one enemy target (unit takes priority over structure)
+	var hit_target: Node3D = null
 	for unit_ref in target_tile.occupied_slots:
 		if is_instance_valid(unit_ref) and unit_ref.player_id != player_id:
-			unit_ref.take_damage(attack_damage)
+			hit_target = unit_ref
+			break
+	if hit_target == null and target_tile.structure != null \
+			and is_instance_valid(target_tile.structure) \
+			and target_tile.structure.player_id != player_id:
+		hit_target = target_tile.structure
+	if hit_target != null:
+		hit_target.take_damage(attack_damage)
 
 	# Damage road on the attacked tile
 	if target_tile.has_road:
@@ -539,12 +542,17 @@ func _find_enemy_tile_in_range() -> Tile:
 			if not is_instance_valid(tile_ref):
 				continue
 
-			# Check if tile has enemy units
+			# Check if tile has enemy units or an enemy structure
 			var has_enemy = false
 			for unit_ref in tile_ref.occupied_slots:
 				if is_instance_valid(unit_ref) and unit_ref.player_id != player_id:
 					has_enemy = true
 					break
+			if not has_enemy:
+				if tile_ref.structure != null \
+						and is_instance_valid(tile_ref.structure) \
+						and tile_ref.structure.player_id != player_id:
+					has_enemy = true
 
 			if not has_enemy:
 				continue
