@@ -1,5 +1,15 @@
 extends Node3D
 class_name Unit
+##
+## Represents an individual unit (infantry, scout, etc.) with movement, combat, and health mechanics.
+## Units follow the player's flow field to move toward strategic targets while avoiding collisions
+## using tile formation slots. Military units can detect and attack nearby enemies within their attack range.
+##
+## Each unit has configurable stats (health, speed, attack damage, range), a mesh representation,
+## and a health bar display. Units occupy formation slots on tiles, enabling multiple units per tile
+## while preventing complete overcrowding. Dead units automatically clean up their formation slots and
+## notify the owning player.
+##
 
 const GameData = preload("res://data/game_data.gd")
 
@@ -170,7 +180,8 @@ func _setup_movement_timer() -> void:
 func take_damage(amount: float):
 	"""
 	Reduces the unit's health by the specified amount and updates the health bar.
-	If health drops to 0 or below, the unit is destroyed.
+	If health drops to 0 or below, the unit is removed from the owning player's units array,
+	its formation slot on the current tile is released, and the unit is destroyed.
 
 	Arguments:
 	- amount (float): The amount of damage to inflict.
@@ -249,17 +260,6 @@ func _correct_height():
 	var unit_half_height = get_unit_height() / 2.0
 	position.y = ground_y + unit_half_height
 
-
-# Called every physics frame (60 times per second by default)
-# Called every frame for time-dependent combat logic
-func _process(_delta: float):
-	"""
-	Called every frame. Handles combat logic for military units, allowing them to attack targets.
-
-	Arguments:
-	- delta (float): The elapsed time since the previous frame.
-	"""
-	pass
 
 # Finds the closest enemy unit in any neighboring tile (Euclidean distance squared)
 # Returns the closest enemy unit instance, or null.

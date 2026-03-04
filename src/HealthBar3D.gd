@@ -1,5 +1,10 @@
 extends Node3D
 class_name HealthBar3D
+## A billboarded 3D health bar that displays above units and structures.
+##
+## Uses a Sprite3D billboard to render a procedural health bar that always faces the camera.
+## The bar color interpolates from red (low health) to green (full health). Bar fill width
+## dynamically updates based on current and maximum health values.
 
 @export var max_width: float = 0.2
 @export var height: float = 0.1
@@ -38,7 +43,7 @@ func setup(unit_size: Vector3):
 	Arguments:
 	- unit_size (Vector3): The scaled AABB size of the associated unit mesh.
 	"""
-	# Calculate max_width based on unit_size.x, for example max_width = unit_size.x * 0.8
+	# Set max_width directly from unit_size.x (1:1 assignment, no scaling factor)
 	max_width = unit_size.x
 	
 	# Set Node3D position in world coordinates

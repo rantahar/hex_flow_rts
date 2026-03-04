@@ -1,5 +1,11 @@
 extends Node3D
 class_name FlowFieldVisualizer
+## Visualizes flow fields as colored arrow meshes showing movement direction and cost.
+##
+## Creates a 3D representation of flow field pathfinding data by spawning cylinder-shaped arrows
+## on reachable tiles. Arrow color represents terrain-weighted movement cost using player-specific
+## gradients (green-to-red for Player 0, blue-to-magenta for Player 1). Arrows are rotated to
+## point toward the next tile in the optimal path. Supports dynamic updates and cleanup.
 
 # Dependencies (FlowField is needed for INF constant)
 var arrow_mesh: Mesh
@@ -23,10 +29,10 @@ var current_arrows: Array[MeshInstance3D] = []
 func _ready():
 	"""
 	Called when the node enters the scene tree for the first time.
-	Initializes the arrow mesh shape (a ConeMesh).
+	Initializes the arrow mesh shape (a CylinderMesh with top_radius=0, forming a cone).
 	"""
-	# Create a basic ConeMesh (the arrow shape) dynamically
-	# ConeMesh must be created here or elsewhere with engine context available.
+	# Create a basic CylinderMesh with top_radius=0 (the arrow shape) dynamically
+	# CylinderMesh must be created here or elsewhere with engine context available.
 	var cone_mesh = CylinderMesh.new()
 	cone_mesh.height = ARROW_HEIGHT
 	cone_mesh.top_radius = 0.0

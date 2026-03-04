@@ -1,5 +1,13 @@
 extends Node
 class_name Grid
+##
+## Manages the hexagonal grid structure and tile connectivity for the game world.
+## Stores all Tile objects, maintains neighbor relationships based on Odd-R offset coordinates,
+## and provides pathfinding services (BFS for unweighted, Dijkstra for weighted paths).
+##
+## The Grid also handles coordinate conversion between hex grid and world space,
+## calculates map boundaries, and provides tile lookup by coordinates or node reference.
+##
 
 const GameData = preload("res://data/game_data.gd")
 

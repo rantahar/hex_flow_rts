@@ -1,6 +1,12 @@
 extends Node3D
 
 class_name MapGenerator
+## Generates a procedurally-created hex map with terrain types, water, mountains, and spawn points.
+##
+## Creates a random map by building a procedural type map, instantiating tile scenes, adjusting
+## heights based on terrain, and selecting spawn locations for each player. Supports various map
+## types (island, coast, river, lake, open) with optional mountain ranges and neighbor-based
+## terrain clustering.
 
 const GameData = preload("res://data/game_data.gd")
 const GameConfig = preload("res://data/game_config.gd")
@@ -24,6 +30,10 @@ const MAP_TYPES: Array = ["island", "coast", "river", "lake", "open"]
 
 
 func generate_map() -> void:
+	"""
+	Main entry point for map generation. Clears the map, builds terrain type data,
+	instantiates tile nodes, and updates their heights.
+	"""
 	randomize()  # Ensure a fresh seed each run
 	generated_tiles.clear()
 	type_map.clear()
@@ -43,6 +53,10 @@ func generate_map() -> void:
 # ─── Type-map construction ────────────────────────────────────────────────────
 
 func _build_type_map() -> void:
+	"""
+	Builds the terrain type map by placing water, optionally adding mountains,
+	and filling remaining tiles with grass. Also selects spawn points.
+	"""
 	var map_type: String = _choose_map_type()
 	print("[MapGen] Map type: %s" % map_type)
 

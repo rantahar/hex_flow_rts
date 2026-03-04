@@ -1,5 +1,16 @@
 extends Node3D
 class_name Structure
+##
+## Represents a building (base, resource generator, unit factory, defensive tower, etc.) with production,
+## defense, and construction mechanics.
+## Structures can generate resources passively, produce units on completion, attack enemies within range,
+## and accept construction resources from builders. Under-construction structures appear as ghosts and
+## gain health as builders deliver resources.
+##
+## Each structure maintains production queues (for bases spawning builders), attack timers, and
+## supports toggle controls for resource generation and unit production. Destroyed structures clean up
+## their tile references and notify the owning player for victory/defeat tracking.
+##
 
 signal unit_produced(unit_type: String, structure: Structure)
 signal destroyed(structure: Structure)
@@ -725,7 +736,10 @@ func get_structure_height() -> float:
 
 func _correct_height():
 	"""
-	Adjusts the structure's Y position to correctly sit on the ground, centered vertically.
+	Adjusts the structure's Y position based on the ground level and a configurable vertical offset.
+	The formula is: position.y = ground_y + (structure_height * y_offset_fraction).
+	A y_offset_fraction of 0.0 (default) places the structure base at ground level (bottom of mesh on ground).
+	A y_offset_fraction of -0.5 sinks the structure halfway into the ground (centers it at ground level).
 	"""
 	var map_node = get_parent()
 	# Assumes map_node (Map.gd) has get_height_at_world_pos
@@ -735,8 +749,8 @@ func _correct_height():
 	# Get vertical offset configuration (0.0 for resting on ground, negative to sink)
 	var y_offset_fraction = config.get("y_offset_fraction", 0.0)
 
-	# Calculate final Y position: Ground Y + Half Height (to center on ground) + Total height * Offset fraction
-	# If y_offset_fraction is -0.5, position.y = ground_y (sinks structure center to ground level, halfway down)
+	# Calculate final Y position: ground_y + (structure_height * y_offset_fraction)
+	# If y_offset_fraction is -0.5, the structure is sunk halfway into the ground.
 	position.y = ground_y + (structure_height * y_offset_fraction)
 
 # --- Production Control Methods ---

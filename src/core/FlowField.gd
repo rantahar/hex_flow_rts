@@ -1,4 +1,13 @@
 class_name FlowField
+##
+## Calculates and stores a flow field for strategic unit pathfinding using Dijkstra's algorithm.
+## A flow field maps each reachable tile to a lowest-cost direction toward designated targets.
+## This enables efficient unit movement toward targets (typically a player's goal or enemy positions)
+## while accounting for terrain costs, friendly unit density, and blockages.
+##
+## The flow field is computed once per player per frame and is queried by units to determine
+## movement direction. It supports multi-source pathfinding (multiple target tiles with different priorities).
+##
 var player_id: int
 var flow_data: Dictionary = {}  # Format: {Vector2i(x,z): {cost: float, direction: Vector2i}}
 

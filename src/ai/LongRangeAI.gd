@@ -22,6 +22,11 @@
 
 class_name LongRangeAI
 extends AIPlayer
+## Artillery-focused AI that denies the battlefield with long-range firepower and area denial.
+##
+## Builds drone factories and mines for economy, then strategically places up to 4 artillery
+## pieces behind the battlefield midpoint (setback toward own territory). Artillery positions
+## are calculated to maintain safe distance from enemy forces while covering approach routes.
 
 # How often (seconds) the AI re-evaluates its build queue.
 const THINK_INTERVAL: float = 5.0

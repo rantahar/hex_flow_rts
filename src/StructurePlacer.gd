@@ -1,5 +1,11 @@
 extends Node3D
 class_name StructurePlacer
+## Handles structure placement and road building UI interactions.
+##
+## Manages placement mode for structures, including tile highlighting, preview visualization,
+## placement validation, affordability checks, and reachability from player bases. Handles road
+## drawing mode with path visualization, cost calculation, and construction queueing. Supports
+## both regular structures and improvement structures with their distinct placement rules.
 
 const GameData = preload("res://data/game_data.gd")
 
@@ -25,13 +31,34 @@ var road_start_tile: Tile = null
 var road_preview_path: Array[Vector2i] = []
 
 func _init():
+	"""
+	Constructor for StructurePlacer.
+	"""
 	# Ensure the node is callable via the Game script
 	pass
 
 func is_active() -> bool:
+	"""
+	Checks if the placer is currently in placement or road drawing mode.
+
+	Returns:
+	- bool: True if in any active mode, false otherwise.
+	"""
 	return active or road_mode
 
 func enter_placement_mode(structure_type: String):
+	"""
+	Enters structure placement mode for the specified structure type.
+
+	For improvement structures (category == "improvement"), placement is restricted to tiles
+	adjacent to the player's own base structures. Tile tinting is applied accordingly and the
+	function returns early, skipping reachability calculation and preview mesh setup.
+	For all other structures, reachable tiles are computed from the player's bases and the
+	preview mesh is created.
+
+	Arguments:
+	- structure_type (String): The key of the structure type to build (e.g., 'base', 'mine').
+	"""
 	current_structure_type = structure_type
 	active = true
 
@@ -177,9 +204,12 @@ func enter_placement_mode(structure_type: String):
 	
 
 func exit_placement_mode():
+	"""
+	Exits structure placement mode and clears all placement overlays from tiles.
+	"""
 	active = false
 	current_structure_type = ""
-	
+
 	# --- REQUIREMENT 2: Remove tint from all tiles when exiting placement mode ---
 	if is_instance_valid(grid_ref):
 		for coords in grid_ref.tiles:
@@ -197,6 +227,12 @@ func exit_placement_mode():
 	print("StructurePlacer: Exited placement mode.")
 
 func update_preview(hovered_tile: Tile):
+	"""
+	Updates the structure preview mesh based on the currently hovered tile.
+
+	Arguments:
+	- hovered_tile (Tile): The tile the mouse is hovering over, or null to hide preview.
+	"""
 	# 1. Hide preview and return if no tile is hovered
 	if not is_instance_valid(hovered_tile):
 		if is_instance_valid(preview_instance):
@@ -267,15 +303,37 @@ func update_preview(hovered_tile: Tile):
 
 # New method to initialize core references
 func setup(grid: Grid):
+	"""
+	Sets the grid reference for pathfinding and tile lookups.
+
+	Arguments:
+	- grid (Grid): The grid instance for the map.
+	"""
 	grid_ref = grid
 	print("StructurePlacer: Grid reference set.")
 
 # New method to initialize the human player reference
 func set_human_player(player_ref: Player):
+	"""
+	Sets the human player reference for resource checking and structure ownership.
+
+	Arguments:
+	- player_ref (Player): The human player instance.
+	"""
 	placing_player = player_ref
 	print("StructurePlacer: Human Player set to Player %d." % placing_player.id if placing_player else -1)
 
 func attempt_placement(tile: Tile, map_node: Node3D) -> bool:
+	"""
+	Attempts to place the current structure type on the hovered tile.
+
+	Arguments:
+	- tile (Tile): The tile to place the structure on.
+	- map_node (Node3D): The Map node for structure placement.
+
+	Returns:
+	- bool: True if placement was successful, false otherwise.
+	"""
 	# Restrict placement for improvements to allowed neighbor tiles
 	var structure_config = GameData.STRUCTURE_TYPES.get(current_structure_type)
 	if not structure_config:
@@ -332,6 +390,9 @@ const TINT_COLOR_ROAD_PREVIEW: Color = Color(0.6, 0.4, 0.2, 0.5)
 const TINT_COLOR_ROAD_START: Color = Color(1.0, 1.0, 0.0, 0.5)
 
 func enter_road_mode():
+	"""
+	Enters road drawing mode, highlighting all buildable tiles.
+	"""
 	road_mode = true
 	road_start_tile = null
 	road_preview_path.clear()
@@ -347,6 +408,9 @@ func enter_road_mode():
 	print("StructurePlacer: Entered road drawing mode.")
 
 func exit_road_mode():
+	"""
+	Exits road drawing mode and clears all road previews.
+	"""
 	road_mode = false
 	road_start_tile = null
 	_clear_road_preview()
@@ -361,6 +425,12 @@ func exit_road_mode():
 	print("StructurePlacer: Exited road drawing mode.")
 
 func update_road_preview(hovered_tile: Tile):
+	"""
+	Updates the road drawing preview based on the hovered tile.
+
+	Arguments:
+	- hovered_tile (Tile): The tile the mouse is hovering over.
+	"""
 	if not road_mode or not is_instance_valid(hovered_tile) or not is_instance_valid(grid_ref):
 		return
 
@@ -383,6 +453,15 @@ func update_road_preview(hovered_tile: Tile):
 	road_start_tile.set_overlay_tint(TINT_COLOR_ROAD_START)
 
 func attempt_road_click(tile: Tile) -> bool:
+	"""
+	Attempts to build a road. First click sets start, second click builds.
+
+	Arguments:
+	- tile (Tile): The clicked tile.
+
+	Returns:
+	- bool: True if the road action was processed, false otherwise.
+	"""
 	if not road_mode or not is_instance_valid(tile) or not is_instance_valid(grid_ref):
 		return false
 
@@ -440,6 +519,9 @@ func attempt_road_click(tile: Tile) -> bool:
 	return true
 
 func _clear_road_preview():
+	"""
+	Clears the road preview visualization and resets the path.
+	"""
 	for coords in road_preview_path:
 		if is_instance_valid(grid_ref) and grid_ref.tiles.has(coords):
 			var tile = grid_ref.tiles[coords]
@@ -449,6 +531,12 @@ func _clear_road_preview():
 	road_preview_path.clear()
 
 func get_road_preview_cost() -> float:
+	"""
+	Calculates the total resource cost for the currently previewed road.
+
+	Returns:
+	- float: The total cost of building the road segments in the preview path.
+	"""
 	if road_preview_path.is_empty() or not is_instance_valid(grid_ref):
 		return 0.0
 	var total: float = 0.0

@@ -1,5 +1,10 @@
 class_name Tile
 extends Node3D
+## A single hexagonal tile on the game map.
+##
+## Tiles represent map cells that can be terrain (walkable or not), contain structures,
+## have roads built on them, and hold units in formation slots. Each tile has up to 6
+## neighbor tiles and can be queried for flow field targeting, occupancy, and costs.
 
 # Preloads needed for type hinting and access to constants
 const GameConfig = preload("res://data/game_config.gd")
@@ -103,9 +108,21 @@ func release_formation_slot(slot_index: int):
 		_refresh_strategic_dot()
 
 func register_builder(builder: Node3D) -> void:
+	"""
+	Registers a builder as occupying this tile.
+
+	Arguments:
+	- builder (Node3D): The builder instance to register.
+	"""
 	builder_occupants.append(builder)
 
 func unregister_builder(builder: Node3D) -> void:
+	"""
+	Unregisters a builder from this tile.
+
+	Arguments:
+	- builder (Node3D): The builder instance to remove.
+	"""
 	builder_occupants.erase(builder)
 
 # Checks if this tile contains any units belonging to a different player.
@@ -188,6 +205,12 @@ func set_tile_visibility(_is_visible: bool):
 		visible = _is_visible
 
 func set_road_under_construction(segment_cost: float = 0.0):
+	"""
+	Marks this tile as having a road under construction and displays a ghost visual.
+
+	Arguments:
+	- segment_cost (float): The resource cost required to complete this road segment.
+	"""
 	_original_walkable = walkable
 	_original_cost = cost
 	road_under_construction = true
@@ -195,11 +218,18 @@ func set_road_under_construction(segment_cost: float = 0.0):
 	_update_road_ghost_visual()
 
 func complete_road_construction():
+	"""
+	Finalizes road construction by clearing the "under construction" state and making it fully operational.
+	"""
 	road_under_construction = false
 	road_builders.clear()
 	set_road()
 
 func set_road():
+	"""
+	Converts this tile to a completed road, updating its walkability and cost properties.
+	Notifies neighbors to update their visual connections.
+	"""
 	has_road = true
 	road_under_construction = false
 	road_hp = GameData.ROAD_CONFIG.max_hp
@@ -212,6 +242,9 @@ func set_road():
 			neighbor._update_road_visual()
 
 func clear_road():
+	"""
+	Removes the road from this tile, restoring original walkability and cost properties.
+	"""
 	has_road = false
 	road_hp = 0.0
 	walkable = _original_walkable
@@ -223,6 +256,12 @@ func clear_road():
 			neighbor._update_road_visual()
 
 func damage_road(amount: float):
+	"""
+	Damages the road on this tile. Destroys the road if health reaches 0.
+
+	Arguments:
+	- amount (float): The amount of damage to inflict on the road.
+	"""
 	if not has_road:
 		return
 	road_hp -= amount

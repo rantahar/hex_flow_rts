@@ -1,4 +1,9 @@
 extends Node3D
+## The main map node that coordinates map generation and terrain height queries.
+##
+## This node is responsible for initializing the tile map via MapGenerator and registering
+## all tiles with the Grid system. It also provides height raycasting for positioning
+## units and structures correctly on uneven terrain.
 
 @onready var map_generator = $MapGenerator
 @onready var grid: Grid = $Grid

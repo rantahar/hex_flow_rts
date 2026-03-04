@@ -1,4 +1,10 @@
 extends HBoxContainer
+class_name ResourceDisplay
+## Displays the current player's resource count in real-time.
+##
+## Updates whenever the player's resources change via signal, showing formatted resource values
+## with two decimal places precision. Connects to the player's resources_updated signal for
+## automatic display synchronization.
 
 var player: Player
 var resource_label: Label

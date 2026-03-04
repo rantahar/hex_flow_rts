@@ -1,17 +1,19 @@
-# AIPlayer — Base class for all AI-controlled players.
-#
-# Subclasses in src/ai/ override start_turn() to implement distinct strategies:
-#   - GreedyAI    (Blue/Orange): economy focus, mines first
-#   - DefensiveAI (Green):       cannon at every base
-#   - LongRangeAI (Yellow):      artillery behind the front line
-#   - AggressiveAI (Purple):     immediate military rush
-#
-# This base implementation provides a safe fallback: build a drone factory
-# next to the base. Subclasses should call their own full logic and do NOT
-# need to call super().
-
 class_name AIPlayer
 extends Player
+## Base class for all AI-controlled players.
+##
+## Provides a default turn strategy (build a drone factory next to the base) and
+## shared spatial utility methods for AI subclasses. Subclasses in src/ai/ override
+## start_turn() to implement distinct strategies:
+##   - GreedyAI    (Blue/Orange): economy focus, mines first
+##   - DefensiveAI (Green):       cannon at every base
+##   - LongRangeAI (Yellow):      artillery behind the front line
+##   - AggressiveAI (Purple):     immediate military rush
+##
+## Subclasses should implement their own full logic in start_turn() and do not
+## need to call super(). Utility methods support base proximity checks, factory
+## detection, structure counting, and map-wide spatial queries (BFS zone marking,
+## enemy centroid calculation).
 
 # Called by Game.gd after the base structure has been placed.
 # Override in subclasses to implement AI-specific strategy.
@@ -38,6 +40,15 @@ func start_turn(p_map_node: Node3D):
 
 # Returns the first ring-1 neighbor that is walkable, buildable, and free.
 func _find_free_neighbor(center_tile: Tile) -> Tile:
+	"""
+	Finds the first available neighboring tile that is walkable, buildable, and unoccupied.
+
+	Arguments:
+	- center_tile (Tile): The tile to search neighbors of.
+
+	Returns:
+	- Tile: The first available neighbor tile, or null if none found.
+	"""
 	for neighbor in center_tile.neighbors:
 		if not is_instance_valid(neighbor):
 			continue
@@ -49,12 +60,30 @@ func _find_free_neighbor(center_tile: Tile) -> Tile:
 # True if all ring-1 neighbors of base_tile are either non-buildable,
 # non-walkable, or already occupied.
 func _is_base_full(base_tile: Tile) -> bool:
+	"""
+	Checks if all adjacent tiles to the base are fully occupied or unbuildable.
+
+	Arguments:
+	- base_tile (Tile): The base tile to check.
+
+	Returns:
+	- bool: True if the base is surrounded and no building is possible, false otherwise.
+	"""
 	return _find_free_neighbor(base_tile) == null
 
 
 # True if any ring-1 neighbor of base_tile holds a drone_factory belonging
 # to this player.
 func _base_has_factory(base_tile: Tile) -> bool:
+	"""
+	Checks if a drone factory is built adjacent to the base.
+
+	Arguments:
+	- base_tile (Tile): The base tile to check neighbors of.
+
+	Returns:
+	- bool: True if a drone factory is found adjacent to the base, false otherwise.
+	"""
 	for neighbor in base_tile.neighbors:
 		if not is_instance_valid(neighbor):
 			continue
@@ -67,6 +96,15 @@ func _base_has_factory(base_tile: Tile) -> bool:
 # True if any ring-1 neighbor of base_tile holds a tank_factory belonging
 # to this player.
 func _base_has_tank_factory(base_tile: Tile) -> bool:
+	"""
+	Checks if a tank factory is built adjacent to the base.
+
+	Arguments:
+	- base_tile (Tile): The base tile to check neighbors of.
+
+	Returns:
+	- bool: True if a tank factory is found adjacent to the base, false otherwise.
+	"""
 	for neighbor in base_tile.neighbors:
 		if not is_instance_valid(neighbor):
 			continue

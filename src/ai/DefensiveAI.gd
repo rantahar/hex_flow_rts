@@ -19,6 +19,11 @@
 
 class_name DefensiveAI
 extends AIPlayer
+## Defensive AI player that builds cannons and mines for pure defense without unit production.
+##
+## Prioritizes resource generation through mines and protects bases with cannons.
+## Expands cautiously to new bases when existing ones are fully fortified.
+## Strong economy but lacks offensive capability.
 
 # How often (seconds) the AI re-evaluates its build queue.
 const THINK_INTERVAL: float = 5.0

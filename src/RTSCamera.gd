@@ -1,5 +1,13 @@
 extends Camera3D
- 
+## RTS-style camera for 3D hex map navigation and tile selection.
+##
+## Provides pan/zoom controls via keyboard and mouse (including middle-mouse drag and edge
+## scrolling), raycast-based tile clicking for left/right mouse buttons, and camera position
+## clamping to map boundaries. Tracks a boolean flag (_is_strategic_zoom) that is set when
+## the camera height crosses a threshold, and emits strategic_zoom_changed so other systems
+## can react (e.g. switching UI detail level). No camera behaviour changes internally on that
+## flag — it is purely a notification signal.
+
 # Signals
 signal hex_clicked(tile: Tile, button_index: int)
 signal strategic_zoom_changed(is_strategic: bool)

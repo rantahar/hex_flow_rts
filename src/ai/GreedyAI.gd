@@ -17,6 +17,11 @@
 
 class_name GreedyAI
 extends AIPlayer
+## Economy-focused AI that dominates through resource multiplication and base expansion.
+##
+## Builds exactly one drone/tank factory and fills remaining base slots with mines for sustained income.
+## Expands to new bases using weighted scoring (proximity, safety, buildability) to trigger an
+## economic snowball: each new base adds 5+ mines of production, funding even faster expansion.
 
 # How often (seconds) the AI re-evaluates its build queue.
 const THINK_INTERVAL: float = 5.0

@@ -1,5 +1,13 @@
 class_name Player
 extends Node3D
+##
+## Represents a player in the game, managing their units, structures, resources, and strategic objectives.
+## Handles unit spawning and management, structure placement and tracking, flow field calculation for unit pathfinding,
+## resource accumulation and spending, and builder dispatch for construction projects.
+##
+## Each player maintains a flow field targeting a goal coordinate, which guides all military units
+## toward strategic objectives. The player tracks resource costs and available funds for structures and units.
+##
 
 signal resources_updated(new_resources: float)
 
@@ -164,6 +172,8 @@ func _on_reserve_timer_timeout() -> void:
 func calculate_flow(grid: Grid) -> void:
 	"""
 	Initiates the calculation of the player's flow field, targeting the player's designated `target` coordinates.
+	In addition to the designated target tile, any tiles containing enemy units or enemy structures are
+	automatically added as flow targets (cost 0.0) by FlowField.calculate(), drawing units toward conflict.
 
 	Arguments:
 	- grid (Grid): The map grid containing all Tile data required for pathfinding.

@@ -1,5 +1,14 @@
 extends Node3D
 class_name Game
+##
+## Main orchestrator for game initialization, state management, and high-level gameplay mechanics.
+## Initializes players (human and AI), manages game state (playing, victory, defeat), and coordinates
+## flow field recalculation, visualization, and construction tracking.
+##
+## Handles player structure placement/selection, UI setup for the human player, and AI turn management.
+## Also manages the game clock, construction recovery tracking (to clean up dead builders), and
+## victory/defeat condition checking based on base ownership.
+##
 
 enum GameState {
 	PLAYING,
@@ -9,8 +18,7 @@ enum GameState {
 
 const GameData = preload("res://data/game_data.gd")
 const GameConfig = preload("res://data/game_config.gd")
-const ResourceDisplay = preload("res://src/ResourceDisplay.gd")
-const BuildMenu = preload("res://src/BuildMenu.gd")
+
 
 const GreedyAI    = preload("res://src/ai/GreedyAI.gd")
 const DefensiveAI = preload("res://src/ai/DefensiveAI.gd")
@@ -50,6 +58,17 @@ func get_strategic_zoom() -> bool:
 # Clears existing players array and initializes players based on config.
 # player_configs: Array of Dictionary, e.g., [{id: 0, color: Color.RED, display_name: "Red Team"}]
 func initialize_players(player_configs: Array) -> void:
+	"""
+	Clears and rebuilds the players array from the provided configuration list.
+	Instantiates the correct Player or AIPlayer subclass (GreedyAI, DefensiveAI, LongRangeAI, AggressiveAI)
+	based on each config entry's "type" and "ai_type" fields.
+	For each player, a new FlowField instance is created and assigned to player.flow_field,
+	with its player_id set to match the player. All players are added to the scene tree.
+
+	Arguments:
+	- player_configs (Array): Array of Dictionary entries, each describing one player
+	  (required keys: "id", "display_name", "color"; optional: "type", "ai_type").
+	"""
 	players.clear()
 
 	for config in player_configs:

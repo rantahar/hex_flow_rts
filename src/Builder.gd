@@ -1,5 +1,10 @@
 extends Node3D
 class_name Builder
+## A builder unit that carries resources to construction sites (structures or roads).
+##
+## Builders follow waypoints from their spawning base to a target tile or structure,
+## delivering resources to support construction. They are specialized work units that
+## move slower than military units but focus on logistics.
 
 const GameData = preload("res://data/game_data.gd")
 
@@ -24,6 +29,17 @@ var movement_timer: Timer
 var stuck_time: float = 0.0
 
 func _init(p_player_id: int, p_target_tile: Tile, p_target_structure: Structure, p_waypoints: Array[Vector2i], p_resources: float, spawn_pos: Vector3):
+	"""
+	Initializes the builder with player ID, target location, waypoints, and resources.
+
+	Arguments:
+	- p_player_id (int): The player ID that owns this builder.
+	- p_target_tile (Tile): The destination tile (for roads, or adjacency for structures).
+	- p_target_structure (Structure): The structure being built (null for roads).
+	- p_waypoints (Array[Vector2i]): Path coordinates from base to destination.
+	- p_resources (float): Amount of resources this builder carries.
+	- spawn_pos (Vector3): Initial world position (base location).
+	"""
 	print("Builder._init: Player %d, target=%s, waypoints=%d, resources=%.1f, spawn=%s" % [p_player_id, str(p_target_tile.get_coords()) if p_target_tile else "null", p_waypoints.size(), p_resources, spawn_pos])
 	player_id = p_player_id
 	target_tile = p_target_tile
@@ -43,6 +59,12 @@ func _init(p_player_id: int, p_target_tile: Tile, p_target_structure: Structure,
 	_setup_movement_timer()
 
 func _setup_mesh(builder_config: Dictionary) -> void:
+	"""
+	Loads the builder's 3D mesh and applies uniform scaling based on hex size configuration.
+
+	Arguments:
+	- builder_config (Dictionary): Configuration dictionary containing mesh_path and size.
+	"""
 	var mesh_path: String = builder_config.get("mesh_path", "")
 	var mesh: Mesh = load(mesh_path)
 	if not mesh:
@@ -67,6 +89,9 @@ func _setup_mesh(builder_config: Dictionary) -> void:
 	add_child(mesh_instance)
 
 func _setup_health_bar() -> void:
+	"""
+	Creates and configures the HealthBar3D for visual health feedback.
+	"""
 	health_bar = HealthBar3D.new()
 	add_child(health_bar)
 	if is_instance_valid(mesh_instance) and mesh_instance.mesh:
@@ -76,6 +101,9 @@ func _setup_health_bar() -> void:
 	health_bar.update_health(health, max_health)
 
 func _setup_movement_timer() -> void:
+	"""
+	Sets up the periodic timer for movement checks (every 0.5 seconds).
+	"""
 	movement_timer = Timer.new()
 	movement_timer.wait_time = 0.5
 	movement_timer.autostart = true
@@ -83,6 +111,9 @@ func _setup_movement_timer() -> void:
 	add_child(movement_timer)
 
 func _ready():
+	"""
+	Called when the node enters the scene tree. Initializes grid reference and corrects height.
+	"""
 	var map_node = get_parent()
 	if map_node and is_instance_valid(map_node.get_node_or_null("Grid")):
 		grid = map_node.get_node("Grid")
@@ -94,12 +125,21 @@ func _ready():
 		set_strategic_zoom(game_node.get_strategic_zoom())
 
 func set_strategic_zoom(is_strategic: bool) -> void:
+	"""
+	Controls mesh visibility based on zoom level for performance (hide when zoomed far out).
+
+	Arguments:
+	- is_strategic (bool): True if zoomed to strategic view, false for normal view.
+	"""
 	if is_instance_valid(mesh_instance):
 		mesh_instance.visible = not is_strategic
 	if is_instance_valid(health_bar):
 		health_bar.visible = not is_strategic
 
 func _correct_height():
+	"""
+	Adjusts the builder's Y position to correctly sit on the ground.
+	"""
 	var map_node = get_parent()
 	if not is_instance_valid(map_node) or not map_node.has_method("get_height_at_world_pos"):
 		return
@@ -108,16 +148,31 @@ func _correct_height():
 	position.y = ground_y + unit_height / 2.0
 
 func get_builder_height() -> float:
+	"""
+	Calculates the total height of the builder model in world units.
+
+	Returns:
+	- float: The scaled height of the builder's mesh.
+	"""
 	if mesh_instance and mesh_instance.mesh:
 		var aabb_size: Vector3 = mesh_instance.mesh.get_aabb().size
 		return aabb_size.y * scale_factor
 	return 0.0
 
 func _on_movement_check_timeout():
+	"""
+	Callback for periodic movement timer. Advances to next waypoint if not currently moving.
+	"""
 	if not is_moving:
 		_advance_to_next_waypoint()
 
 func _physics_process(delta):
+	"""
+	Called every physics frame. Handles builder movement towards target and stuck detection.
+
+	Arguments:
+	- delta (float): The elapsed time since the previous physics frame.
+	"""
 	if not is_moving:
 		stuck_time += delta
 		if stuck_time >= 1.0:
@@ -128,7 +183,7 @@ func _physics_process(delta):
 
 	var target_destination: Vector3 = target_world_pos
 
-	# Effective speed based on tile cost
+	# Effective speed based on tile cost (roads are faster)
 	var tile_cost: float = 1.0
 	if is_instance_valid(current_tile):
 		if current_tile.has_road and not current_tile.road_under_construction:
@@ -151,12 +206,15 @@ func _physics_process(delta):
 	var direction: Vector3 = movement_vector.normalized()
 	position += direction * effective_speed * delta
 
-	# Rotate to face direction
+	# Rotate to face direction of movement
 	var planar_direction = Vector2(direction.x, direction.z).normalized()
 	if planar_direction != Vector2.ZERO:
 		rotation.y = atan2(planar_direction.x, planar_direction.y)
 
 func _advance_to_next_waypoint():
+	"""
+	Advances the builder to the next waypoint along the path. Stops if blocked by enemies.
+	"""
 	if not is_instance_valid(grid):
 		return
 
@@ -174,7 +232,7 @@ func _advance_to_next_waypoint():
 	if next_tile.has_enemy_units(player_id):
 		return
 
-	# Move to tile center — no formation slot needed
+	# Move to tile center — no formation slot needed for builders
 	if is_instance_valid(current_tile):
 		current_tile.unregister_builder(self)
 	next_tile.register_builder(self)
@@ -190,6 +248,9 @@ func _advance_to_next_waypoint():
 	is_moving = true
 
 func _on_stuck():
+	"""
+	Called when builder is stuck for too long. Refunds resources and removes the builder.
+	"""
 	print("Builder (Player %d): Stuck for too long, refunding %.1f resources." % [player_id, resources_carried])
 
 	if is_instance_valid(current_tile):
@@ -215,6 +276,9 @@ func _on_stuck():
 	queue_free()
 
 func _on_arrival():
+	"""
+	Called when builder reaches its destination. Delivers resources to structure or road.
+	"""
 	if is_instance_valid(current_tile):
 		current_tile.unregister_builder(self)
 
@@ -267,6 +331,12 @@ func _on_arrival():
 	queue_free()
 
 func take_damage(amount: float):
+	"""
+	Reduces the builder's health. Removes builder from tile and refunds resources if health reaches 0.
+
+	Arguments:
+	- amount (float): The amount of damage to inflict.
+	"""
 	health -= amount
 	health = maxf(0.0, health)
 

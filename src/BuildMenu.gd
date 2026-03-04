@@ -1,4 +1,11 @@
 extends VBoxContainer
+class_name BuildMenu
+## UI menu for selecting structures to build and road building.
+##
+## Displays dynamically-generated buttons for each buildable structure type with costs,
+## automatically disabling buttons when the player lacks resources. Includes a separate road
+## building button and periodically prints player resource status. Emits signals when structures
+## or roads are selected.
 
 signal structure_selected(structure_key: String)
 signal road_build_requested()

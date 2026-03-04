@@ -1,5 +1,11 @@
 extends VBoxContainer
 class_name ProductionControlUI
+## UI panel for controlling structure selection, production, and resource generation.
+##
+## Displays information about selected structures including name and stats, allows toggling
+## production and resource generation, shows unit production progress bars, and previews
+## structure meshes with an orbiting camera view. Supports multi-structure selection with
+## unified control and single-structure detailed info panels.
 
 const Structure = preload("res://src/core/Structure.gd")
 const GameData = preload("res://data/game_data.gd")

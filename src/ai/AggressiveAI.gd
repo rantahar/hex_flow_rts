@@ -24,6 +24,11 @@
 
 class_name AggressiveAI
 extends AIPlayer
+## Military-focused AI that launches an early rush before opponents establish economy.
+##
+## Prioritizes unit production over economy: builds two factories per base for infantry/tank output,
+## then fills remaining slots with mines. Limited to 2 bases total, with the second positioned
+## aggressively toward the enemy to maximize early pressure and deny opponent expansion.
 
 const THINK_INTERVAL: float = 5.0
 const MAX_BASES: int = 2
@@ -125,8 +130,8 @@ func _try_expand(grid) -> void:
 
 
 # Scores candidate tiles for a forward base:
-#   - Proximity (30%):  close to own territory so supply lines are short.
-#   - Aggression (50%): close to the enemy — push the front line forward.
+#   - Proximity (50%):  close to own territory so supply lines are short.
+#   - Aggression (30%): close to the enemy — push the front line forward.
 #   - Buildability (20%): enough ring-1 neighbors for mines and factories.
 func _find_expansion_tile(grid) -> Tile:
 	var forbidden: Dictionary = {}
